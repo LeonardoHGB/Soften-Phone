@@ -1,0 +1,34 @@
+# Segredos (NAO versionar) — use secret.example.h como modelo
+/src/data/secret.h
+
+# Build
+/build/
+/dist/
+/out/
+/cmake-build-*/
+*.user
+
+# Artefatos internos de engenharia reversa (contem dados do app original)
+/docs/mapas-raw.json
+/docs/fidelidade-gaps.json
+
+# Qt
+*.moc
+moc_*.cpp
+qrc_*.cpp
+ui_*.h
+*.qmake.stash
+
+# MSVC
+*.obj
+*.pdb
+*.ilk
+*.exp
+*.lib
+.vs/
+
+# Inno Setup
+/packaging/Output/
+
+# Artefatos locais
+*.zip

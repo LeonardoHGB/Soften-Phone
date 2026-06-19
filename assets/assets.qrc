@@ -1,0 +1,7 @@
+<RCC>
+  <qresource prefix="/assets">
+    <file>logo.png</file>
+    <file>logo.ico</file>
+    <file>chamando.mp3</file>
+  </qresource>
+</RCC>
