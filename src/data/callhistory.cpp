@@ -24,6 +24,7 @@ static CallAudit fromJson(const QJsonObject& o) {
     c.answered = o.value("Answered").toBool();
     c.answeredElsewhere = o.value("AnsweredElsewhere").toBool();
     c.outcome = o.value("Outcome").toString();
+    c.sipCallId = o.value("SipCallId").toString();
     return c;
 }
 
@@ -38,6 +39,7 @@ static QJsonObject toJson(const CallAudit& c) {
         { "Answered", c.answered },
         { "AnsweredElsewhere", c.answeredElsewhere },
         { "Outcome", c.outcome },
+        { "SipCallId", c.sipCallId },
     };
 }
 

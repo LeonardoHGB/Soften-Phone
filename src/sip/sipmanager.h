@@ -22,6 +22,15 @@ namespace sphone {
 
 class PjEngine;
 
+// Telemetria de midia da chamada ativa (rodape do painel Recentes).
+struct MediaStats {
+    bool    valid = false;
+    QString codec;          // ex "opus", "PCMU"
+    int     clockRate = 0;  // Hz (ex 48000)
+    int     rttMs = -1;     // latencia RTT em ms (-1 = desconhecido)
+    int     lossPermil = -1;// perda de pacotes RX em ‰ (-1 = desconhecido)
+};
+
 class SipManager : public QObject {
     Q_OBJECT
 public:
@@ -36,6 +45,7 @@ public:
     bool isOnHold() const     { return m_onHold; }
     float micLevel()          { return readLevel(true); }
     float speakerLevel()      { return readLevel(false); }
+    MediaStats mediaStats();  // telemetria da chamada ativa (invalida fora de InCall)
 
     void start();                         // inicia o PJSIP e registra o ramal
     void answer();                        // atende a chamada de entrada
@@ -58,7 +68,7 @@ signals:
 private slots:
     void onRegState(int registered, int code);
     void onCallState(int callId, int state, int lastCode, int flags);
-    void onIncomingCall(int callId, QString from);
+    void onIncomingCall(int callId, QString from, QString sipCallId);
 
 private:
     void  setState(LineState s);
@@ -88,6 +98,7 @@ private:
     // Metadados da chamada em andamento (para auditoria).
     CallDirection m_callDir = CallDirection::Inbound;
     QString  m_callPeerNumber, m_callPeerName;
+    QString  m_callSipId;      // Call-ID SIP da chamada corrente (correlacao p/ o bot)
     QDateTime m_callStarted;   bool m_callStartedValid = false;
     QDateTime m_callAnswered;  bool m_callAnsweredValid = false;
     bool m_callTransferred = false;

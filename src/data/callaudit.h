@@ -22,6 +22,8 @@ struct CallAudit {
     bool          answered = false;    // conectou
     bool          answeredElsewhere = false; // atendida em outro ramal / ring group
     QString       outcome;             // "Atendida"/"Perdida"/"Recusada"/"Transferida"/"Cancelada"/...
+    QString       sipCallId;           // Call-ID SIP: chave de correlacao das pernas
+                                       // da mesma chamada (toca em N ramais) p/ o bot
 };
 
 }  // namespace sphone

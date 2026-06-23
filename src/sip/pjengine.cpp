@@ -48,14 +48,16 @@ void cb_incoming_call(pjsua_acc_id acc, pjsua_call_id call_id, pjsip_rx_data* rd
     PJ_UNUSED_ARG(acc);
     PJ_UNUSED_ARG(rdata);
 
+    QString sip_call_id;
     if (pjsua_call_get_info(call_id, &ci) == PJ_SUCCESS) {
         int n = (int)(ci.remote_info.slen < 255 ? ci.remote_info.slen : 255);
         if (n > 0) memcpy(from, ci.remote_info.ptr, n);
+        sip_call_id = QString::fromUtf8(ci.call_id.ptr, (int)ci.call_id.slen);
     }
     // 180 Ringing imediato (sem isso a perna fica "muda" para o PABX/fila).
     pjsua_call_answer(call_id, 180, NULL, NULL);
 
-    if (g_self) g_self->emitIncoming((int)call_id, QString::fromUtf8(from));
+    if (g_self) g_self->emitIncoming((int)call_id, QString::fromUtf8(from), sip_call_id);
 }
 
 // Termino por "atendida em outro ramal" (CANCEL com Reason: cause=200/elsewhere).
@@ -230,6 +232,34 @@ int PjEngine::getLevel(int callId, int* tx, int* rx) {
     return 0;
 }
 
+QString PjEngine::sipCallId(int callId) {
+    ensure_thread();
+    pjsua_call_info ci;
+    if (pjsua_call_get_info((pjsua_call_id)callId, &ci) != PJ_SUCCESS) return QString();
+    return QString::fromUtf8(ci.call_id.ptr, (int)ci.call_id.slen);
+}
+
+bool PjEngine::getStats(int callId, QString& codec, int& clockRate, int& rttMs, int& lossPermil) {
+    ensure_thread();
+    pjsua_stream_info si;
+    if (pjsua_call_get_stream_info((pjsua_call_id)callId, 0, &si) != PJ_SUCCESS) return false;
+    if (si.type != PJMEDIA_TYPE_AUDIO) return false;
+
+    const pjmedia_codec_info& f = si.info.aud.fmt;
+    codec     = QString::fromUtf8(f.encoding_name.ptr, (int)f.encoding_name.slen);
+    clockRate = (int)f.clock_rate;
+
+    pjsua_stream_stat st;
+    if (pjsua_call_get_stream_stat((pjsua_call_id)callId, 0, &st) == PJ_SUCCESS) {
+        rttMs = (int)(st.rtcp.rtt.last / 1000);   // RTT (us) -> ms
+        const unsigned pkt = st.rtcp.rx.pkt, loss = st.rtcp.rx.loss;
+        lossPermil = (pkt + loss > 0) ? (int)((pj_uint64_t)loss * 1000 / (pkt + loss)) : 0;
+    } else {
+        rttMs = -1; lossPermil = -1;
+    }
+    return true;
+}
+
 void PjEngine::unregister() {
     ensure_thread();
     if (g_acc != PJSUA_INVALID_ID) pjsua_acc_set_registration(g_acc, PJ_FALSE);
@@ -266,6 +296,8 @@ void PjEngine::unhold(int)                                     {}
 int  PjEngine::transfer(int, const QString&, const QString&)   { return -1; }
 void PjEngine::mute(int, bool)                                 {}
 int  PjEngine::getLevel(int, int*, int*)                       { return -1; }
+bool PjEngine::getStats(int, QString&, int&, int&, int&)       { return false; }
+QString PjEngine::sipCallId(int)                               { return QString(); }
 
 }  // namespace sphone
 

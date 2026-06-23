@@ -27,6 +27,7 @@ option(SPHONE_WITH_PJSIP "Linkar o motor SIP PJSUA2 (requer PJSIP buildado /MD)"
 
 set(SPHONE_SOURCES
     src/main.cpp
+    src/core/brand.cpp
     src/core/diag.cpp
     src/core/updater.cpp
     src/sip/pjengine.cpp
@@ -37,8 +38,10 @@ set(SPHONE_SOURCES
     src/audio/tones.cpp
     src/audio/ringtone.cpp
     src/ui/controls.cpp
+    src/ui/signalwidgets.cpp
+    src/ui/recentsmodel.cpp
+    src/ui/panels.cpp
     src/ui/promptdialog.cpp
-    src/ui/settingsform.cpp
     src/ui/updateform.cpp
     src/ui/mainwindow.cpp
     assets/assets.qrc
@@ -60,8 +63,10 @@ set(SPHONE_HEADERS
     src/sip/pjengine.h
     src/sip/sipmanager.h
     src/ui/controls.h
+    src/ui/signalwidgets.h
+    src/ui/recentsmodel.h
+    src/ui/panels.h
     src/ui/promptdialog.h
-    src/ui/settingsform.h
     src/ui/updateform.h
     src/ui/mainwindow.h
 )

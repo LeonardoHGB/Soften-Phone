@@ -3,8 +3,10 @@
 
 # Build
 /build/
+/build-pjsip/
 /dist/
 /out/
+/release-build/
 /cmake-build-*/
 *.user
 

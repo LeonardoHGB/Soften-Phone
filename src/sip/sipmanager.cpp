@@ -71,7 +71,7 @@ void SipManager::onRegState(int registered, int code) {
     }
 }
 
-void SipManager::onIncomingCall(int callId, QString from) {
+void SipManager::onIncomingCall(int callId, QString from, QString sipCallId) {
     auto [number, name] = parseCaller(from);
     QString num = number.trimmed().isEmpty() ? QStringLiteral("desconhecido") : number;
 
@@ -98,6 +98,7 @@ void SipManager::onIncomingCall(int callId, QString from) {
     if (continuation) {
         m_incomingCall = callId;
         m_currentCall  = callId;
+        m_callSipId    = sipCallId;   // rodada nova da fila: Call-ID pode ter mudado
         emit statusMessage(QStringLiteral("Chamada recebida de %1.").arg(m_incomingFrom));
         emit incomingCallSignal(m_incomingFrom, m_incomingName);
         setState(LineState::Ringing);
@@ -114,6 +115,7 @@ void SipManager::onIncomingCall(int callId, QString from) {
     m_callDir = CallDirection::Inbound;
     m_callPeerNumber = m_incomingFrom;
     m_callPeerName   = m_incomingName;
+    m_callSipId      = sipCallId;
     m_callStarted = QDateTime::currentDateTime(); m_callStartedValid = true;
     m_callAnsweredValid = false;
     m_callTransferred = false;
@@ -241,6 +243,7 @@ void SipManager::call(const QString& destination) {
     m_callDir = CallDirection::Outbound;
     m_callPeerNumber = number;
     m_callPeerName.clear();
+    m_callSipId.clear();
     m_callStarted = QDateTime::currentDateTime(); m_callStartedValid = true;
     m_callAnsweredValid = false;
     m_callTransferred = false;
@@ -253,6 +256,7 @@ void SipManager::call(const QString& destination) {
         setState(LineState::Idle);
     } else {
         m_currentCall = id;
+        m_callSipId = m_pj->sipCallId(id);   // chamada recem-criada: Call-ID ja valido
         raiseCallStarted();
     }
 }
@@ -305,6 +309,13 @@ float SipManager::readLevel(bool mic) {
         return n > 1.0f ? 1.0f : n;
     }
     return 0.0f;
+}
+
+MediaStats SipManager::mediaStats() {
+    MediaStats s;
+    if (m_currentCall < 0 || m_state != LineState::InCall) return s;
+    s.valid = m_pj->getStats(m_currentCall, s.codec, s.clockRate, s.rttMs, s.lossPermil);
+    return s;
 }
 
 QPair<QString, QString> SipManager::parseCaller(const QString& remote) {
@@ -363,6 +374,7 @@ void SipManager::raiseCallStarted() {
     rec.answeredElsewhere = false;
     rec.outcome = m_callDir == CallDirection::Outbound ? QStringLiteral("Chamando")
                                                        : QStringLiteral("Tocando");
+    rec.sipCallId = m_callSipId;
     emit callStarted(rec);
 }
 
@@ -393,6 +405,7 @@ void SipManager::raiseCallEnded(const QString& forcedOutcome, int lastCode, bool
     rec.answered = answered;
     rec.answeredElsewhere = answeredElsewhere;
     rec.outcome = outcome;
+    rec.sipCallId = m_callSipId;
 
     m_callStartedValid = false;   // evita auditar duas vezes
     emit callEnded(rec);
@@ -425,6 +438,7 @@ void SipManager::beginPendingMiss() {
     rec.answered = false;
     rec.answeredElsewhere = false;
     rec.outcome = QStringLiteral("Perdida");
+    rec.sipCallId = m_callSipId;
 
     m_pendingMissRecord = rec;
     m_pendingMissValid = true;

@@ -40,15 +40,24 @@ public:
     void mute(int callId, bool mute);
     int  getLevel(int callId, int* tx, int* rx);  // 0 ok / -1 (0..255)
 
+    // Call-ID SIP da chamada (string do cabecalho). Vazio se indisponivel. Em
+    // grupos de toque com proxy que forka, todas as pernas veem o mesmo valor.
+    QString sipCallId(int callId);
+
+    // Estatisticas de midia da chamada ativa (codec/RTT/perda RX). true se obteve;
+    // out-params: codec (ex "opus"), clockRate (Hz), rttMs (-1 desconhecido),
+    // lossPermil (perda RX em ‰, -1 desconhecido). Stub OFF retorna false.
+    bool getStats(int callId, QString& codec, int& clockRate, int& rttMs, int& lossPermil);
+
     // Internos: chamados pelas callbacks C do pjsua para re-emitir os sinais.
     void emitReg(int registered, int code)                       { emit regState(registered, code); }
     void emitCallState(int callId, int st, int code, int flags)  { emit callState(callId, st, code, flags); }
-    void emitIncoming(int callId, const QString& from)           { emit incomingCall(callId, from); }
+    void emitIncoming(int callId, const QString& from, const QString& sipCallId) { emit incomingCall(callId, from, sipCallId); }
 
 signals:
     void regState(int registered, int code);
     void callState(int callId, int state, int lastCode, int flags);
-    void incomingCall(int callId, QString from);
+    void incomingCall(int callId, QString from, QString sipCallId);
 };
 
 }  // namespace sphone

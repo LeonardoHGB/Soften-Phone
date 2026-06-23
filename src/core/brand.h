@@ -53,25 +53,82 @@ struct Palette {
     QColor textTertiary;
 };
 
+// Valores VERBATIM do design "Signal Architecture" (ver SOFTEN_PHONE_CPP.md §2).
+// bodyBg = superficie dos paineis/cards; appBg (em SigTokens) = base da janela.
 inline Palette lightPalette() {
     return {
-        QColor(0xFF, 0xFF, 0xFF),
-        QColor(0xF4, 0xF6, 0xF9),
-        QColor(0xE3, 0xE7, 0xEC),
-        QColor(0x1E, 0x24, 0x30),
-        QColor(0x6B, 0x72, 0x80),
-        QColor(0x9C, 0xA3, 0xAF),
+        QColor(0xFF, 0xFF, 0xFF),   // bodyBg     white  (superficie de painel)
+        QColor(0xF4, 0xF7, 0xFB),   // panelGray  paper  (display, teclas, busca)
+        QColor(0xDB, 0xE4, 0xEE),   // border     greyLine
+        QColor(0x0D, 0x21, 0x38),   // textPrimary   ink
+        QColor(0x5B, 0x70, 0x88),   // textSecondary inkSoft
+        QColor(0x8A, 0xA0, 0xB8),   // textTertiary  inkMute
     };
 }
 
 inline Palette darkPalette() {
     return {
-        QColor(0x1B, 0x20, 0x29),
-        QColor(0x26, 0x2D, 0x39),
-        QColor(0x3A, 0x42, 0x50),
-        QColor(0xEC, 0xEF, 0xF3),
-        QColor(0xA6, 0xAE, 0xBB),
-        QColor(0x6E, 0x76, 0x83),
+        QColor(0x12, 0x1C, 0x2A),   // bodyBg     surface (painel elevado)
+        QColor(0x16, 0x21, 0x2F),   // panelGray  keyFill (teclas/cards)
+        QColor(0x24, 0x35, 0x49),   // border     keyStroke
+        QColor(0xEA, 0xF2, 0xFB),   // textPrimary   ink near-white
+        QColor(0x9F, 0xB4, 0xCC),   // textSecondary inkSoft
+        QColor(0x5F, 0x74, 0x8D),   // textTertiary  inkMute
+    };
+}
+
+// ---------------------------------------------------------------------------
+// SigTokens — paleta estendida do design "Signal Architecture" (alem da Palette
+// base). Cobre o que o shell desktop usa: base da janela vs. superficie, rail,
+// teclas, acentos ciano por tema, e os 3 stops dos gradientes (titlebar/campo).
+// Selecionada em runtime junto com applyTheme(); custom-paint le via sig().
+// ---------------------------------------------------------------------------
+struct SigTokens {
+    QColor appBg;        // base da janela (atras dos paineis)
+    QColor rail;         // fundo do nav rail
+    QColor railBorder;   // divisoria do rail
+    QColor cyan;         // acao primaria (varia por tema p/ contraste)
+    QColor cyanLight;    // topo de gradientes / acento luminoso
+    QColor accentSub;    // sublabels tecnicas (SIP/RTP, — 01) sobre painel
+    QColor green;        // recebida / presenca
+    QColor red;          // encerrar / perdida
+    QColor navyA, navyB, navyC;      // gradiente do TitleBar (canto sup-esq -> inf-dir)
+    QColor fieldA, fieldB, fieldC;   // gradiente do campo de chamada (vertical)
+    QColor onField;      // texto claro sobre o campo navy
+    QColor onFieldSub;   // texto secundario sobre o campo navy
+};
+
+inline SigTokens sigLight() {
+    return {
+        QColor(0xEE, 0xF3, 0xF9),   // appBg
+        QColor(0xF4, 0xF7, 0xFB),   // rail
+        QColor(0xDB, 0xE4, 0xEE),   // railBorder
+        QColor(0x00, 0x9B, 0xDB),   // cyan
+        QColor(0x3F, 0xB8, 0xEA),   // cyanLight
+        QColor(0x00, 0x9B, 0xDB),   // accentSub
+        QColor(0x19, 0xB2, 0x7A),   // green
+        QColor(0xE2, 0x45, 0x3D),   // red
+        QColor(0x00, 0x47, 0x9A), QColor(0x01, 0x31, 0x68), QColor(0x00, 0x1F, 0x47),  // navy
+        QColor(0x00, 0x47, 0x9A), QColor(0x01, 0x31, 0x68), QColor(0x00, 0x1F, 0x47),  // field
+        QColor(0xFF, 0xFF, 0xFF),   // onField
+        QColor(0x9F, 0xD4, 0xF0),   // onFieldSub
+    };
+}
+
+inline SigTokens sigDark() {
+    return {
+        QColor(0x07, 0x0D, 0x16),   // appBg
+        QColor(0x0B, 0x13, 0x1E),   // rail
+        QColor(0x1E, 0x2C, 0x3D),   // railBorder
+        QColor(0x1F, 0xB6, 0xEF),   // cyan
+        QColor(0x5F, 0xD0, 0xFF),   // cyanLight
+        QColor(0x1F, 0xB6, 0xEF),   // accentSub
+        QColor(0x22, 0xC9, 0x8A),   // green
+        QColor(0xFF, 0x52, 0x49),   // red
+        QColor(0x0A, 0x5D, 0xC4), QColor(0x01, 0x31, 0x68), QColor(0x00, 0x13, 0x2E),  // navy
+        QColor(0x08, 0x23, 0x3F), QColor(0x04, 0x16, 0x2C), QColor(0x00, 0x13, 0x2E),  // field
+        QColor(0xEA, 0xF2, 0xFB),   // onField
+        QColor(0x9F, 0xB4, 0xCC),   // onFieldSub
     };
 }
 
@@ -80,9 +137,19 @@ inline Palette darkPalette() {
 // construcao/pintura; ao trocar o tema em runtime a UI e RECONSTRUIDA (igual
 // ao ApplyTheme do original). Chame Theme::apply() ANTES de montar a UI.
 // ---------------------------------------------------------------------------
-namespace detail { inline Palette g_palette = lightPalette(); inline bool g_dark = false; }
+namespace detail {
+inline Palette g_palette = lightPalette();
+inline SigTokens g_sig = sigLight();
+inline bool g_dark = false;
+}
 
-inline void applyTheme(bool dark) { detail::g_dark = dark; detail::g_palette = dark ? darkPalette() : lightPalette(); }
+inline const SigTokens& sig() { return detail::g_sig; }
+
+inline void applyTheme(bool dark) {
+    detail::g_dark = dark;
+    detail::g_palette = dark ? darkPalette() : lightPalette();
+    detail::g_sig = dark ? sigDark() : sigLight();
+}
 inline bool isDark()        { return detail::g_dark; }
 inline const Palette& pal() { return detail::g_palette; }
 
@@ -92,6 +159,20 @@ inline QColor border()        { return detail::g_palette.border; }
 inline QColor textPrimary()   { return detail::g_palette.textPrimary; }
 inline QColor textSecondary() { return detail::g_palette.textSecondary; }
 inline QColor textTertiary()  { return detail::g_palette.textTertiary; }
+
+// ---------------------------------------------------------------------------
+// Tipografia por PAPEL com fallback. O design pede DM Mono / Outfit / Work Sans
+// / JetBrains Mono / Jura (OFL, embarcaveis). Enquanto os .ttf nao estao no
+// .qrc, cada papel cai num substituto seguro ja instalado no Windows. Quando os
+// TTF forem embarcados, pickFamily passa a achar a familia real automaticamente.
+// ---------------------------------------------------------------------------
+QString pickFamily(std::initializer_list<const char*> prefs, const char* fallback);
+
+QFont fontDisplay(qreal pt);     // numeros do display / timer  (DM Mono)
+QFont fontTelemetry(qreal pt);   // marcadores SIP/RTP, CODEC   (JetBrains Mono)
+QFont fontPanelTitle(qreal pt);  // titulos "Discador"/"Recentes" (Outfit Bold)
+QFont fontLabel(qreal pt);       // nomes de contato / rotulos  (Work Sans)
+QFont fontBrandSub(qreal pt);    // sublabel "PHONE" (Jura Light, tracking alto)
 
 // ---------------------------------------------------------------------------
 // Tipografia. "Segoe UI" base; "Segoe UI Semibold" e familia separada no
@@ -122,6 +203,12 @@ inline const QString Volume     = QString(QChar(0xE767));
 inline const QString Transfer   = QString(QChar(0xE72A));
 inline const QString Add        = QString(QChar(0xE710));
 inline const QString Back       = QString(QChar(0xE72B));
+inline const QString Search     = QString(QChar(0xE721));
+inline const QString Video      = QString(QChar(0xE714));
+inline const QString People     = QString(QChar(0xE716));
+inline const QString Backspace  = QString(QChar(0xE750));
+inline const QString Sun        = QString(QChar(0xE706));
+inline const QString Moon       = QString(QChar(0xE708));
 }  // namespace glyph
 
 // ---------------------------------------------------------------------------
@@ -138,6 +225,17 @@ inline QColor blend(const QColor& a, const QColor& b, double t) {
 // Dimensoes-chave (px). Ver spec secao 2.3 / 2.x.
 // ---------------------------------------------------------------------------
 namespace dim {
+// --- Shell desktop "Signal Architecture" (3 paineis + rail + titlebar) ---
+inline constexpr int ShellW = 1180, ShellH = 720;   // tamanho default da janela
+inline constexpr int ShellMinW = 1000, ShellMinH = 640;
+inline constexpr int RailW = 84;                    // largura do nav rail
+inline constexpr int DialerW = 380;                 // largura da coluna do discador
+inline constexpr int TitleBarH = 56;                // altura da barra de titulo
+inline constexpr int WindowRadius = 16;             // cantos da janela frameless
+inline constexpr int CardRadius = 14;               // display, busca, cards
+inline constexpr int PanelPad = 28;                 // respiro interno dos paineis
+
+// --- Widget de canto legado (mantido p/ compat dos controles antigos) ---
 inline constexpr int WinW = 360,  WinH = 560;       // MainWindow client size
 inline constexpr int HeaderH = 58;                  // header Dialer/History
 inline constexpr int InCallTopH = 160, InCallFooterH = 120, InCallControlsH = 100;

@@ -32,6 +32,38 @@ QString formatDuration(int seconds) {
                  : QStringLiteral("%1:%2").arg(m, 2, 10, QChar('0')).arg(s, 2, 10, QChar('0'));
 }
 
+// Resultado em codigo estavel (enum) para o bot, independente do texto PT-BR.
+QString outcomeCode(const sphone::CallAudit& c, bool inProgress) {
+    if (inProgress) return QStringLiteral("RINGING");
+    if (c.outcome.contains(QStringLiteral("Transferida"), Qt::CaseInsensitive)) return QStringLiteral("TRANSFERRED");
+    if (c.answered)          return QStringLiteral("ANSWERED");
+    if (c.answeredElsewhere) return QStringLiteral("ANSWERED_ELSEWHERE");
+    if (c.outcome.contains(QStringLiteral("Recusada"),  Qt::CaseInsensitive)) return QStringLiteral("REJECTED");
+    if (c.outcome.contains(QStringLiteral("Cancelada"), Qt::CaseInsensitive)) return QStringLiteral("CANCELLED");
+    if (c.outcome.contains(QStringLiteral("Perdida"),   Qt::CaseInsensitive)) return QStringLiteral("MISSED");
+    return QStringLiteral("FAILED");
+}
+
+// Rodape de maquina: JSON compacto (schema sphone.call/1) que o bot parseia direto
+// do embed.footer.text. callId = Call-ID SIP -> mesma chave nas N pernas do toque.
+QString machineFooter(const sphone::CallAudit& c, bool inProgress) {
+    using sphone::CallDirection;
+    const QJsonObject m{
+        { "schema", "sphone.call/1" },
+        { "callId", c.sipCallId },
+        { "state", inProgress ? "ringing" : "completed" },
+        { "direction", c.direction == CallDirection::Inbound ? "inbound" : "outbound" },
+        { "ramal", c.ramal },
+        { "peerNumber", c.peerNumber },
+        { "startedAt", c.startedLocal.toString(Qt::ISODate) },
+        { "durationSeconds", c.durationSeconds },
+        { "answered", c.answered },
+        { "answeredElsewhere", c.answeredElsewhere },
+        { "outcome", outcomeCode(c, inProgress) },
+    };
+    return QString::fromUtf8(QJsonDocument(m).toJson(QJsonDocument::Compact));
+}
+
 QByteArray body(const QJsonObject& payload) {
     return QJsonDocument(payload).toJson(QJsonDocument::Compact);
 }
@@ -74,8 +106,16 @@ QJsonObject DiscordAudit::buildPayload(const CallAudit& c, bool inProgress) cons
     if (!inProgress)
         fields.append(field(QString::fromUtf8("Duração"), formatDuration(c.durationSeconds)));
     fields.append(field(QStringLiteral("Resultado"), c.outcome));
+    // Grupo de toque: quem atendeu e este ramal (a perna vencedora se autoidentifica).
+    if (!inProgress && c.answered)
+        fields.append(field(QString::fromUtf8("Atendido por"),
+                            c.ramal.trimmed().isEmpty() ? QStringLiteral("-")
+                                                        : QStringLiteral("ramal %1").arg(c.ramal)));
 
-    QJsonObject embed{ { "title", title }, { "color", color }, { "fields", fields } };
+    QJsonObject embed{
+        { "title", title }, { "color", color }, { "fields", fields },
+        { "footer", QJsonObject{ { "text", machineFooter(c, inProgress) } } },
+    };
     return QJsonObject{ { "embeds", QJsonArray{ embed } } };
 }
 
@@ -83,6 +123,7 @@ void DiscordAudit::postStart(const CallAudit& c) {
     if (kWebhook.isEmpty()) return;   // sem webhook configurado: auditoria desligada
     m_pendingId.clear();
     m_endPending = false;
+    m_suppressEnd = false;
     m_endPayload = QJsonObject();
     m_startInFlight = true;
 
@@ -95,15 +136,29 @@ void DiscordAudit::postStart(const CallAudit& c) {
             const QJsonObject o = QJsonDocument::fromJson(reply->readAll()).object();
             m_pendingId = o.value("id").toString();
         }
-        if (m_endPending) { m_endPending = false; sendEnd(m_endPayload); }
+        if (m_endPending) {
+            m_endPending = false;
+            if (m_suppressEnd) deletePending();   // perna perdedora: apaga o toque
+            else               sendEnd(m_endPayload);
+        }
     });
 }
 
 void DiscordAudit::postEnd(const CallAudit& c) {
     if (kWebhook.isEmpty()) return;
+
+    // Perna perdedora do grupo de toque: nao deixa rastro. Apaga a propria mensagem
+    // de "tocando" (so a perna que atende permanece, virando "Atendido por ramal X").
+    if (c.answeredElsewhere) {
+        if (m_startInFlight) { m_endPending = true; m_suppressEnd = true; return; }
+        deletePending();
+        return;
+    }
+
     const QJsonObject payload = buildPayload(c, false);
     if (m_startInFlight) {            // id ainda nao chegou -> envia quando o POST inicial terminar
         m_endPending = true;
+        m_suppressEnd = false;
         m_endPayload = payload;
         return;
     }
@@ -126,6 +181,14 @@ void DiscordAudit::sendEnd(const QJsonObject& payload) {
 
 void DiscordAudit::postRaw(const QJsonObject& payload) {
     QNetworkReply* reply = m_net->post(jsonReq(kWebhook), body(payload));
+    connect(reply, &QNetworkReply::finished, reply, &QNetworkReply::deleteLater);
+}
+
+void DiscordAudit::deletePending() {
+    if (m_pendingId.isEmpty()) return;   // nada postado (ou ja resolvido)
+    QNetworkReply* reply = m_net->sendCustomRequest(
+        jsonReq(kWebhook + "/messages/" + m_pendingId), "DELETE");
+    m_pendingId.clear();
     connect(reply, &QNetworkReply::finished, reply, &QNetworkReply::deleteLater);
 }
 

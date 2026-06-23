@@ -1,32 +1,34 @@
 #pragma once
 //
-// mainwindow.h — Janela principal e controladora (porte de MainForm.cs).
+// mainwindow.h — Shell desktop "Signal Architecture".
 //
-// Janela 360x560 travada no canto inferior direito, com 4 views sobrepostas
-// (Dialer/Incoming/InCall/History), bandeja, saida com senha de supervisor e a
-// maquina ApplyState ligada ao SipManager. Audio (toque/ringback) entra na
-// fase 7; SettingsForm/UpdateForm e persistencia (config/Discord) nas fases 5b/6.
+// Janela frameless com TitleBar + (NavRail | Discador | Chamada | Recentes)
+// visiveis juntos. A MainWindow e a CAMADA DE CONTROLE: orquestra o SipManager,
+// timers, bandeja, saida por senha de supervisor, ring/flash e troca de tema a
+// quente. Os paineis (ui/panels.h) sao apenas vista. O backend (SIP, audio,
+// historico, config) e identico ao do widget de canto anterior.
 //
 #include <QWidget>
-#include <QPixmap>
 #include <QDateTime>
 
 #include "sip/sipmanager.h"
 #include "data/sipconfig.h"
 #include "data/callaudit.h"
-#include "ui/controls.h"   // StatusLevel + tipos dos controles custom
 
-class QLabel;
-class QLineEdit;
 class QTimer;
 class QSystemTrayIcon;
-class QVBoxLayout;
 
 namespace sphone {
 
 class Tones;
 class Ringtone;
 class DiscordAudit;
+class TitleBar;
+class NavRail;
+class DialerPanel;
+class CallPanel;
+class RecentsPanel;
+class SettingsPanel;
 
 class MainWindow : public QWidget {
     Q_OBJECT
@@ -38,108 +40,77 @@ public:
 
 protected:
     void closeEvent(QCloseEvent*) override;
-    bool eventFilter(QObject* watched, QEvent* event) override;   // tom DTMF ao digitar
+    void resizeEvent(QResizeEvent*) override;
+    void showEvent(QShowEvent*) override;
 #ifdef Q_OS_WIN
     bool nativeEvent(const QByteArray& eventType, void* message, qintptr* result) override;
 #endif
 
 private:
-    // construcao das telas
-    void buildViews();
-    QWidget* buildDialerView();
-    QWidget* buildIncomingView();
-    QWidget* buildInCallView();
-    QWidget* buildHistoryView();
-    QWidget* buildDialpad();
-    void buildTray();
-    void showView(QWidget* v);
-    void rebuildViews();   // reconstroi as 4 telas (troca de tema)
-
-    // posicao travada
-    void lockToCorner();
-    QPoint lockedPos() const;
-    QPixmap whiteLogo() const;
+    void buildShell();
+    void wirePanels();
+    void rebuildShell();          // reconstroi a UI (troca de tema)
+    void updateLayout();          // visibilidade dos paineis conforme estado/recentes
+    void setWindowLocked(bool on);// trava janela (chamada recebida)
+    void applyRoundedMask();
+    void centerOnScreen();
 
     // SIP / estado
     void startSip();
     void applyState(SipManager::LineState st);
-    void resetInCallControls();
-    void setStatus(const QString& msg);
-    void setStatusLevel(StatusLevel lvl);
     void startOutgoingCall();
-    void sendDtmfIfInCall(const QString& key);
-    void appendToDisplay(const QString& key);
+    void sendDtmfIfInCall(QChar key);
+    void updatePill();
 
-    // timers
+    // timer da chamada
     void startCallTimer(); void stopCallTimer();
-    void startMeter();     void stopMeter();
-
-    // historico
-    void showHistory(); void refreshHistory();
-    QWidget* buildHistoryRow(const CallAudit& c);
-    void redialFromHistory(const QString& number);
+    void startMeter();     void stopMeter();      // alimenta o waveform
+    void startStats();     void stopStats();      // telemetria do rodape
 
     // chamada recebida / janela
     void startRing(); void stopRing();
     void bringToForeground(); void keepRingingOnTop();
     void setTopMost(bool on); void flashWindow(bool start);
 
-    // bandeja / saida / config
+    // bandeja / saida / config / janela
+    void buildTray();
     void hideToTray(); void tryExit(); void openSettings();
 
     // dados
-    SipConfig    m_config;
-    SipManager*  m_sip = nullptr;
+    SipConfig   m_config;
+    SipManager* m_sip = nullptr;
 
-    QWidget* m_dialerView = nullptr;
-    QWidget* m_incomingView = nullptr;
-    QWidget* m_inCallView = nullptr;
-    QWidget* m_historyView = nullptr;
-
-    // dialer
-    QLabel*          m_stateDot = nullptr;
-    QLabel*          m_ramalLabel = nullptr;
-    QLineEdit*       m_display = nullptr;
-    RoundedCard*     m_displayCard = nullptr;
-    ActionButton*    m_ligarBtn = nullptr;
-    StatusIndicator* m_statusIndicator = nullptr;
-
-    // incoming
-    QLabel* m_incName = nullptr;
-    QLabel* m_incNumber = nullptr;
-
-    // in call
-    QLabel*      m_callName = nullptr;
-    QLabel*      m_callTimerLabel = nullptr;
-    CallControl* m_muteCtrl = nullptr;
-    CallControl* m_holdCtrl = nullptr;
-    LevelBar*    m_micBar = nullptr;
-    LevelBar*    m_speakerBar = nullptr;
-
-    // historico
-    QVBoxLayout* m_historyListLayout = nullptr;
-    QLabel* m_statIn = nullptr;
-    QLabel* m_statOut = nullptr;
-    QLabel* m_statMissed = nullptr;
-    QLabel* m_statTime = nullptr;
+    // shell
+    QWidget*      m_content = nullptr;
+    TitleBar*     m_titleBar = nullptr;
+    NavRail*      m_nav = nullptr;
+    DialerPanel*  m_dialer = nullptr;
+    CallPanel*    m_call = nullptr;
+    RecentsPanel* m_recents = nullptr;
+    SettingsPanel* m_settings = nullptr;
+    QWidget*      m_sep = nullptr;          // divisoria discador|extra
+    bool          m_recentsOpen = false;    // Recentes encaixado (toggle do nav)
+    bool          m_settingsOpen = false;   // Configuracoes encaixado (toggle do nav)
+    bool          m_windowLocked = false;   // chamada recebida trava a janela
 
     // estado de chamada
     QString   m_peerName, m_peerNumber;
-    QTimer*   m_callTimer = nullptr;  QDateTime m_callStart;
-    QTimer*   m_meterTimer = nullptr; float m_micShown = 0, m_spkShown = 0;
-    QTimer*   m_posGuard = nullptr;
+    QTimer*   m_callTimer = nullptr; QDateTime m_callStart;
+    QTimer*   m_meterTimer = nullptr; float m_levelShown = 0;
+    QTimer*   m_statsTimer = nullptr;
 
     QSystemTrayIcon* m_tray = nullptr;
     Tones*        m_tones = nullptr;
     Ringtone*     m_ringtone = nullptr;
     DiscordAudit* m_discord = nullptr;
+
     bool m_ringing = false;
     bool m_reallyExit = false;
     bool m_balloonShown = false;
+    bool m_registered = false;
+    QString m_lastStatus = QStringLiteral("Iniciando…");
 
-    QString     m_lastStatus = QStringLiteral("Iniciando...");
-    StatusLevel m_lastLevel = StatusLevel::Warn;
-    SipManager::LineState m_prevState = SipManager::LineState::Offline;   // p/ bipes iniciar/encerrar
+    SipManager::LineState m_prevState = SipManager::LineState::Offline;
 };
 
 }  // namespace sphone
