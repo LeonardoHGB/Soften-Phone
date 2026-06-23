@@ -7,9 +7,9 @@
 //
 // Grupo de toque (a chamada toca em N ramais, 1 atende): a perna que atende vira
 // "Atendida por ramal X"; as pernas que recebem "atendida em outro ramal" APAGAM
-// a propria mensagem de toque, para o canal nao encher de duplicatas. Cada embed
-// leva um rodape JSON (schema sphone.call/1) com o Call-ID SIP como chave de
-// correlacao, para um bot futuro consolidar as pernas da mesma chamada.
+// a propria mensagem de toque, para o canal nao encher de duplicatas. Cada mensagem
+// leva um JSON (schema sphone.call/1) em spoiler no content — recolhido para humanos,
+// cru para o bot — com o Call-ID SIP como chave de correlacao das pernas da chamada.
 //
 #include <QObject>
 #include <QString>

@@ -44,9 +44,10 @@ QString outcomeCode(const sphone::CallAudit& c, bool inProgress) {
     return QStringLiteral("FAILED");
 }
 
-// Rodape de maquina: JSON compacto (schema sphone.call/1) que o bot parseia direto
-// do embed.footer.text. callId = Call-ID SIP -> mesma chave nas N pernas do toque.
-QString machineFooter(const sphone::CallAudit& c, bool inProgress) {
+// Carga de maquina: JSON compacto (schema sphone.call/1) que vai no "content" da
+// mensagem dentro de um spoiler (||...||) — fica recolhido para humanos e o bot le
+// o content cru. callId = Call-ID SIP -> mesma chave nas N pernas do toque.
+QString machinePayload(const sphone::CallAudit& c, bool inProgress) {
     using sphone::CallDirection;
     const QJsonObject m{
         { "schema", "sphone.call/1" },
@@ -112,11 +113,12 @@ QJsonObject DiscordAudit::buildPayload(const CallAudit& c, bool inProgress) cons
                             c.ramal.trimmed().isEmpty() ? QStringLiteral("-")
                                                         : QStringLiteral("ramal %1").arg(c.ramal)));
 
-    QJsonObject embed{
-        { "title", title }, { "color", color }, { "fields", fields },
-        { "footer", QJsonObject{ { "text", machineFooter(c, inProgress) } } },
+    QJsonObject embed{ { "title", title }, { "color", color }, { "fields", fields } };
+    // JSON de maquina no content, como spoiler: recolhido para humanos, cru para o bot.
+    return QJsonObject{
+        { "content", QStringLiteral("||%1||").arg(machinePayload(c, inProgress)) },
+        { "embeds", QJsonArray{ embed } },
     };
-    return QJsonObject{ { "embeds", QJsonArray{ embed } } };
 }
 
 void DiscordAudit::postStart(const CallAudit& c) {

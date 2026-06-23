@@ -7,6 +7,7 @@
 #include "core/diag.h"
 #include "data/callhistory.h"
 #include "data/discordaudit.h"
+#include "data/exitaudit.h"
 #include "audio/tones.h"
 #include "audio/ringtone.h"
 
@@ -545,10 +546,12 @@ void MainWindow::tryExit() {
     QByteArray h = QCryptographicHash::hash(dlg.value().toUtf8(), QCryptographicHash::Sha256).toHex();
     if (QString::fromLatin1(h).toLower() == QString::fromLatin1(kSupervisorExitHash)) {
         m_reallyExit = true;
+        ExitAudit::report(ExitAudit::ExitBySupervisor, m_config.username);
         if (m_tray) m_tray->hide();
         close();
         qApp->quit();
     } else {
+        ExitAudit::report(ExitAudit::ExitAttemptDenied, m_config.username);
         QMessageBox::warning(this, QStringLiteral("Soften Phone"), QString::fromUtf8("Senha incorreta."));
     }
 }

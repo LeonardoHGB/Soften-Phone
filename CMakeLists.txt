@@ -30,11 +30,13 @@ set(SPHONE_SOURCES
     src/core/brand.cpp
     src/core/diag.cpp
     src/core/updater.cpp
+    src/core/selfprotect.cpp
     src/sip/pjengine.cpp
     src/sip/sipmanager.cpp
     src/data/sipconfig.cpp
     src/data/callhistory.cpp
     src/data/discordaudit.cpp
+    src/data/exitaudit.cpp
     src/audio/tones.cpp
     src/audio/ringtone.cpp
     src/ui/controls.cpp
@@ -54,10 +56,12 @@ set(SPHONE_HEADERS
     src/core/diag.h
     src/core/version.h
     src/core/updater.h
+    src/core/selfprotect.h
     src/data/sipconfig.h
     src/data/callaudit.h
     src/data/callhistory.h
     src/data/discordaudit.h
+    src/data/exitaudit.h
     src/audio/tones.h
     src/audio/ringtone.h
     src/sip/pjengine.h

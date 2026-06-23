@@ -8,6 +8,7 @@
 //
 #include "core/brand.h"
 #include "core/diag.h"
+#include "core/selfprotect.h"
 #include "ui/mainwindow.h"
 
 #include <QApplication>
@@ -39,6 +40,13 @@ int main(int argc, char** argv) {
     }
 
     sphone::diag::log("=== SPHONE iniciado ===");
+
+    // Em release, nega o "Finalizar tarefa" para usuario sem admin (best-effort).
+    // Em debug fica desligado para nao atrapalhar o encerramento durante o dev.
+#ifdef NDEBUG
+    sphone::hardenProcessAgainstTermination();
+#endif
+
     brand::applyTheme(false);   // tema claro (config virá na fase de persistencia)
 
     sphone::MainWindow w;
