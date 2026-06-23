@@ -16,7 +16,7 @@ para **C++ moderno com Qt 6 e PJSUA2**. Mesmo visual, mesmas features, binário 
 [![PJSIP](https://img.shields.io/badge/PJSUA2-PJSIP-FF6C37?style=for-the-badge)](https://www.pjsip.org/)
 [![Windows](https://img.shields.io/badge/Windows-10%2F11-0078D6?style=for-the-badge&logo=windows&logoColor=white)](#)
 
-![Status](https://img.shields.io/badge/status-completo_e_funcional-4ADE80?style=flat-square)
+![Status](https://img.shields.io/badge/Status-Em%20Desenvolvimento-yellow?style=flat-square)
 ![Version](https://img.shields.io/badge/versão-1.0.0-009BDB?style=flat-square)
 ![Build](https://img.shields.io/badge/build-CMake_%2B_Ninja-064F8C?style=flat-square)
 ![Installer](https://img.shields.io/badge/instalador-Inno_Setup_6-014694?style=flat-square)
