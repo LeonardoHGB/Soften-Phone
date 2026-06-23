@@ -5,8 +5,8 @@
     3) sphone-version.json (versao + url + sha256 + notes)
 
   Depois, suba OS DOIS arquivos (SPHONE-Setup-<versao>.exe e sphone-version.json)
-  como assets de um GitHub Release em LeonardoHGB/SPhone. O app instalado checa o
-  sphone-version.json do 'latest' e se atualiza sozinho.
+  como assets de um GitHub Release em LeonardoHGB/Soften-Phone. O app instalado checa
+  o sphone-version.json do 'latest' e se atualiza sozinho.
 
   A versao sai do src\core\version.h (fonte unica). Bump dela + a FILEVERSION do
   app.rc antes de lancar. Uso: tools\publish-release.ps1 [-Notes "..."] [-NoBuild]
@@ -48,7 +48,7 @@ if (-not (Test-Path $setup)) { throw "Instalador nao encontrado: $setup" }
 $sha = (Get-FileHash $setup -Algorithm SHA256).Hash
 $manifest = [ordered]@{
     version = $version
-    url     = "https://github.com/LeonardoHGB/SPhone/releases/latest/download/SPHONE-Setup-$version.exe"
+    url     = "https://github.com/LeonardoHGB/Soften-Phone/releases/latest/download/SPHONE-Setup-$version.exe"
     sha256  = $sha
     notes   = $Notes
 }

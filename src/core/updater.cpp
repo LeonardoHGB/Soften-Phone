@@ -16,11 +16,11 @@
 #include <QUrl>
 
 namespace {
-// Canal de update do SPHONE. O release deve conter os assets sphone-version.json
-// e SPHONE-Setup-x.y.z.exe. (Asset proprio p/ nao colidir com o version.json do
-// SoftenPhone antigo no mesmo repo.)
+// Canal de update do SPHONE, repo proprio LeonardoHGB/Soften-Phone (o SoftenPhone
+// .NET antigo ficou em LeonardoHGB/SPhone). O release 'latest' deve conter os assets
+// sphone-version.json e SPHONE-Setup-x.y.z.exe.
 const QString kManifestUrl = QStringLiteral(
-    "https://github.com/LeonardoHGB/SPhone/releases/latest/download/sphone-version.json");
+    "https://github.com/LeonardoHGB/Soften-Phone/releases/latest/download/sphone-version.json");
 }
 
 namespace sphone {
