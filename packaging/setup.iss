@@ -6,7 +6,7 @@
 #define MyExeName "SPHONE.exe"
 ; A versao pode vir por /DMyAppVersion=x.y.z (publish-release.ps1 a passa do version.h).
 #ifndef MyAppVersion
-  #define MyAppVersion "1.2.0"
+  #define MyAppVersion "1.2.1"
 #endif
 #define MyPublisher "Soften Sistemas"
 #define MyDist "..\dist"
@@ -52,8 +52,20 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: 
     ValueName: "SPHONE"; ValueData: """{app}\{#MyExeName}"""; Flags: uninsdeletevalue; Tasks: autostart
 
 [Run]
+; Instalacao interativa: checkbox "Abrir agora" na tela final (pulado se silencioso).
 Filename: "{app}\{#MyExeName}"; Description: "Abrir o {#MyAppName} agora"; Flags: nowait postinstall skipifsilent
+; Auto-update silencioso (/VERYSILENT): a entrada acima e pulada por skipifsilent,
+; entao relancamos o app explicitamente quando a instalacao for silenciosa.
+Filename: "{app}\{#MyExeName}"; Flags: nowait; Check: SilentInstall
 
 [UninstallRun]
 ; O app roda na bandeja: encerra antes de desinstalar.
 Filename: "{cmd}"; Parameters: "/c taskkill /im {#MyExeName} /f"; Flags: runhidden; RunOnceId: "killsphone"
+
+[Code]
+// Usado pelo [Run] para relancar o app apos a atualizacao SILENCIOSA (/VERYSILENT),
+// ja que a entrada interativa "Abrir agora" e pulada por skipifsilent.
+function SilentInstall: Boolean;
+begin
+  Result := WizardSilent;
+end;
