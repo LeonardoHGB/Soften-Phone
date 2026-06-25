@@ -144,6 +144,13 @@ int PjEngine::start(int port) {
     pjsua_media_config media_cfg;
     pjsua_media_config_default(&media_cfg);
 
+    // Cancelamento de eco acustico WebRTC AEC3 (melhor algoritmo). Habilitado no
+    // build do PJSIP via config_site.h (PJMEDIA_HAS_WEBRTC_AEC3=1). Sem isto, o
+    // softphone de mesa devolve a voz do remoto captada pelo mic -> quem liga
+    // ouve a propria voz. O AEC3 exige clock de 16/32/48k (o PJSUA usa 16k).
+    media_cfg.ec_tail_len = 200;   // ms; o AEC3 gerencia a cauda internamente
+    media_cfg.ec_options  = PJMEDIA_ECHO_WEBRTC_AEC3 | PJMEDIA_ECHO_USE_NOISE_SUPPRESSOR;
+
     if (pjsua_init(&cfg, &log_cfg, &media_cfg) != PJ_SUCCESS) { pjsua_destroy(); return -2; }
 
     pjsua_transport_config tcfg;

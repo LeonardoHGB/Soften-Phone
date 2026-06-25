@@ -27,6 +27,7 @@
 #include <QRegularExpressionValidator>
 #include <QDate>
 #include <QWindow>
+#include <QScreen>
 #include <QEvent>
 #include <QKeyEvent>
 #include <algorithm>
@@ -164,7 +165,15 @@ void TitleBar::mousePressEvent(QMouseEvent* e) {
 }
 void TitleBar::mouseMoveEvent(QMouseEvent* e) {
     if (m_locked || !m_dragging || !(e->buttons() & Qt::LeftButton)) return;
-    window()->move(e->globalPosition().toPoint() - m_dragOffset);
+    QWidget* w = window();
+    QPoint target = e->globalPosition().toPoint() - m_dragOffset;
+    // Trava de seguranca: a janela nunca sai da area visivel (esconder arrastando).
+    if (QScreen* scr = w->screen()) {
+        const QRect a = scr->availableGeometry();
+        target.setX(std::clamp(target.x(), a.left(), std::max(a.left(), a.right()  - w->width())));
+        target.setY(std::clamp(target.y(), a.top(),  std::max(a.top(),  a.bottom() - w->height())));
+    }
+    w->move(target);
 }
 
 // ===========================================================================
@@ -316,29 +325,17 @@ DialerPanel::DialerPanel(QWidget* parent) : QWidget(parent) {
     v->addLayout(grid, 1);
     v->addSpacing(16);
 
-    // Acao: satelite video | botao chamar | satelite mudo.
+    // Acao: botao chamar centralizado, com halo pulsante.
     auto* actions = new QHBoxLayout();
     actions->setContentsMargins(0, 0, 0, 0);
-    auto mkSat = [this](const QString& gl) {
-        auto* s = new RoundGlyphButton(this);
-        s->setFixedSize(46, 46);
-        s->glyph = gl; s->glyphSize = 16;
-        s->idleBorder = border();
-        s->idleGlyph = sig().accentSub;
-        s->checkable = true;
-        return s;
-    };
     actions->addStretch();
-    actions->addSpacing(46);   // espelha a largura do satelite (mantem o botao centralizado)
-    actions->addSpacing(22);
     m_call = new CallButton(this);
     m_call->setFixedSize(72, 72);
     m_call->base = sig().cyan;
     m_call->glyph = glyph::Phone;
+    m_call->glow = false;          // sem halo/fade em volta
     connect(m_call, &CallButton::clicked, this, &DialerPanel::callRequested);
     actions->addWidget(m_call);
-    actions->addSpacing(22);
-    actions->addWidget(mkSat(glyph::Microphone));
     actions->addStretch();
     v->addLayout(actions);
 }

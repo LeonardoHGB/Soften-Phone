@@ -28,6 +28,8 @@
 #include <QShowEvent>
 #include <QPainter>
 #include <QPainterPath>
+#include <QCursor>
+#include <QEvent>
 #include <algorithm>
 
 #ifdef Q_OS_WIN
@@ -70,6 +72,7 @@ MainWindow::MainWindow(QWidget* parent) : QWidget(parent) {
     buildShell();
     buildTray();
     centerOnScreen();
+    startEvasion();
 
     sphone::diag::log("MainWindow (shell desktop) criada.");
 
@@ -147,7 +150,8 @@ void MainWindow::buildShell() {
 }
 
 void MainWindow::wirePanels() {
-    connect(m_titleBar, &TitleBar::minimizeClicked, this, [this] { showMinimized(); });
+    // Minimizar nao esconde: a janela "muda de lado" em vez de ir pra barra de tarefas.
+    connect(m_titleBar, &TitleBar::minimizeClicked, this, [this] { fleeFromCursor(); });
     connect(m_titleBar, &TitleBar::closeClicked,    this, [this] { close(); });
 
     connect(m_nav, &NavRail::goHome, this, [this] {
@@ -210,7 +214,9 @@ void MainWindow::wirePanels() {
     });
 
     connect(m_recents, &RecentsPanel::redial, this, [this](const QString& num) {
-        m_dialer->setNumber(num);
+        // Mostra ja no formato discavel (sem +55), espelhando o que sera ligado.
+        const QString norm = SipManager::normalizeDestination(num);
+        m_dialer->setNumber(norm.isEmpty() ? num : norm);
         m_dialer->focusDisplay();
     });
 
@@ -503,6 +509,47 @@ void MainWindow::flashWindow(bool start) {
 }
 
 // =====================================================================
+//  Anti-esconder: a janela foge do cursor perto da barra de titulo
+// =====================================================================
+// O usuario nao pode arrastar a janela para fora da tela nem minimizar para
+// "sumir" com o softphone. Sempre que o cursor chega perto da barra de titulo
+// (unica regiao que arrasta/minimiza), a janela salta para o canto oposto,
+// 100% dentro da area visivel — fica impossivel agarrar para mover ou esconder.
+void MainWindow::startEvasion() {
+    if (m_evadeTimer) return;
+    m_evadeTimer = new QTimer(this);
+    m_evadeTimer->setInterval(20);            // ~50 Hz: pega o cursor antes de pousar na barra
+    connect(m_evadeTimer, &QTimer::timeout, this, [this] { evadeTick(); });
+    m_evadeTimer->start();
+}
+
+void MainWindow::evadeTick() {
+    if (m_windowLocked) return;               // chamada recebida: janela presa no centro
+    if (!isVisible() || (windowState() & Qt::WindowMinimized)) return;
+    // Zona sensivel = barra de titulo (coords globais) com folga. Mexer no corpo
+    // (discador, nav, paineis) fica abaixo dela e nao dispara a fuga.
+    const int margin = 26;
+    const QRect bar(mapToGlobal(QPoint(0, 0)), QSize(width(), dim::TitleBarH));
+    if (bar.adjusted(-margin, -margin, margin, margin).contains(QCursor::pos()))
+        fleeFromCursor();
+}
+
+void MainWindow::fleeFromCursor() {
+    if (m_windowLocked) return;
+    QScreen* scr = screen() ? screen() : QApplication::primaryScreen();
+    if (!scr) return;
+    const QRect a = scr->availableGeometry();
+    const QPoint c = QCursor::pos();
+    const int W = width(), H = height();
+    // Vai para o canto horizontal/vertical oposto ao cursor e trava dentro da tela.
+    int nx = (c.x() < a.center().x()) ? a.right()  - W - 8 : a.left() + 8;
+    int ny = (c.y() < a.center().y()) ? a.bottom() - H - 8 : a.top()  + 8;
+    nx = std::clamp(nx, a.left(), std::max(a.left(), a.right()  - W));
+    ny = std::clamp(ny, a.top(),  std::max(a.top(),  a.bottom() - H));
+    move(nx, ny);
+}
+
+// =====================================================================
 //  Bandeja / saida / config / janela
 // =====================================================================
 void MainWindow::buildTray() {
@@ -610,13 +657,30 @@ void MainWindow::closeEvent(QCloseEvent* e) {
     e->ignore();
 }
 
+// Minimizar nunca e permitido (esconder = sumir da vista). Qualquer rota que
+// minimize por fora — Win+M, Win+D ("Mostrar area de trabalho"), clique na barra
+// de tarefas — cai aqui e e desfeita no proximo ciclo do loop de eventos.
+void MainWindow::changeEvent(QEvent* e) {
+    QWidget::changeEvent(e);
+    if (e->type() == QEvent::WindowStateChange && !m_reallyExit
+        && (windowState() & Qt::WindowMinimized)) {
+        QTimer::singleShot(0, this, [this] {
+            if (m_reallyExit) return;
+            setWindowState(windowState() & ~Qt::WindowMinimized);
+            showNormal(); raise(); activateWindow();
+        });
+    }
+}
+
 #ifdef Q_OS_WIN
 bool MainWindow::nativeEvent(const QByteArray&, void* message, qintptr* result) {
     auto* msg = static_cast<MSG*>(message);
-    // Chamada recebida trava a janela: bloqueia minimizar/mover/maximizar nativos.
-    if (m_windowLocked && msg->message == WM_SYSCOMMAND) {
+    if (msg->message == WM_SYSCOMMAND) {
         const WPARAM cmd = msg->wParam & 0xFFF0;
-        if (cmd == SC_MINIMIZE || cmd == SC_MOVE || cmd == SC_MAXIMIZE) {
+        // Minimizar e sempre bloqueado (menu do sistema, clique na barra de tarefas).
+        if (cmd == SC_MINIMIZE) { if (result) *result = 0; return true; }
+        // Chamada recebida trava tambem mover/maximizar nativos.
+        if (m_windowLocked && (cmd == SC_MOVE || cmd == SC_MAXIMIZE)) {
             if (result) *result = 0;
             return true;
         }

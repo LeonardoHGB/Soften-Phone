@@ -57,6 +57,9 @@ public:
     bool transfer(const QString& destination);
     void sendDtmf(quint8 digit);          // 10=*, 11=#, senao digito
 
+    // Limpa separadores e remove o codigo de pais "+55"; "" = numero invalido.
+    static QString normalizeDestination(const QString& raw);
+
 signals:
     void stateChanged(sphone::SipManager::LineState s);
     void statusMessage(const QString& msg);
@@ -73,7 +76,6 @@ private slots:
 private:
     void  setState(LineState s);
     float readLevel(bool mic);
-    static QString normalizeDestination(const QString& raw);   // "" = invalido
     static QString friendlyFailure(int code);
     static QPair<QString, QString> parseCaller(const QString& remote);
     void  raiseCallStarted();

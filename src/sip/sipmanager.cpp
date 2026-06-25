@@ -221,6 +221,10 @@ QString SipManager::normalizeDestination(const QString& raw) {
         bool ok = (c >= '0' && c <= '9') || c == '*' || c == '#' || c == '+';
         if (!ok) return QString();
     }
+    // Numeros vindos do historico chegam em E.164 (+5517997887174). O PABX nao
+    // roteia com o codigo de pais: remove o "+55" (ou "0055") deixando DDD+numero.
+    if (s.startsWith(QStringLiteral("+55")))      s.remove(0, 3);
+    else if (s.startsWith(QStringLiteral("0055"))) s.remove(0, 4);
     return s;
 }
 
