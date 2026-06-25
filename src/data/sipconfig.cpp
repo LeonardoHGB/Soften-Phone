@@ -71,7 +71,7 @@ SipConfig SipConfig::load() {
     c.displayName      = o.value("DisplayName").toString();
     c.expirySeconds    = o.value("ExpirySeconds").toInt(120);
     c.keepAliveSeconds = o.value("KeepAliveSeconds").toInt(15);
-    c.darkTheme        = o.value("DarkTheme").toBool(false);
+    c.darkTheme        = o.value("DarkTheme").toBool(true);
 
     const QString prot = o.value("PasswordProtected").toString();
     if (!prot.isEmpty()) c.password = unprotect(prot);

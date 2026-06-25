@@ -17,7 +17,7 @@ struct SipConfig {
     QString displayName;       // persistido, NAO usado no registro (paridade)
     int     expirySeconds = 120;     // nao propagado ao motor (paridade)
     int     keepAliveSeconds = 15;   // nao propagado; motor usa ka_interval=15 fixo
-    bool    darkTheme = false;
+    bool    darkTheme = true;     // base da campanha "Rumo ao Hexa" e o tema escuro
 
     bool isComplete() const {
         return !server.isEmpty() && !username.isEmpty() && !password.isEmpty();

@@ -8,6 +8,7 @@
 
 #include <QPainter>
 #include <QPainterPath>
+#include <QPolygonF>
 #include <QPaintEvent>
 #include <QMouseEvent>
 #include <QResizeEvent>
@@ -27,7 +28,6 @@
 #include <QRegularExpressionValidator>
 #include <QDate>
 #include <QWindow>
-#include <QScreen>
 #include <QEvent>
 #include <QKeyEvent>
 #include <algorithm>
@@ -71,6 +71,37 @@ QLabel* mkMarker(const QString& text, QWidget* parent) {
                    Qt::AlignRight | Qt::AlignVCenter, parent);
 }
 
+// Bandeira do Brasil simplificada (campanha "Rumo ao Hexa"): retangulo verde,
+// losango amarelo e circulo azul. Cantos arredondados + borda branca sutil.
+class BrazilFlag : public QWidget {
+public:
+    explicit BrazilFlag(QWidget* parent = nullptr) : QWidget(parent) {
+        setFixedSize(34, 23);
+        setAttribute(Qt::WA_TransparentForMouseEvents);
+    }
+protected:
+    void paintEvent(QPaintEvent*) override {
+        QPainter g(this);
+        g.setRenderHint(QPainter::Antialiasing);
+        const QRectF r(0.5, 0.5, width() - 1.0, height() - 1.0);
+        QPainterPath rp; rp.addRoundedRect(r, 3, 3);
+        g.fillPath(rp, QColor(0x00, 0x97, 0x39));            // verde fundo
+        const double cx = r.center().x(), cy = r.center().y();
+        const double ix = r.width() * 0.16, iy = r.height() * 0.16;
+        QPolygonF dia({ {cx, r.top() + iy}, {r.right() - ix, cy},
+                        {cx, r.bottom() - iy}, {r.left() + ix, cy} });
+        g.setPen(Qt::NoPen);
+        g.setBrush(QColor(0xFF, 0xDF, 0x00));                // losango amarelo
+        g.drawPolygon(dia);
+        const double cr = r.height() * 0.24;
+        g.setBrush(QColor(0x01, 0x21, 0x69));                // circulo azul
+        g.drawEllipse(QPointF(cx, cy), cr, cr);
+        g.setPen(QPen(QColor(255, 255, 255, 140), 1.0));     // borda branca sutil
+        g.setBrush(Qt::NoBrush);
+        g.drawPath(rp);
+    }
+};
+
 }  // namespace
 
 // ===========================================================================
@@ -83,17 +114,11 @@ TitleBar::TitleBar(QWidget* parent) : QWidget(parent) {
     h->setContentsMargins(18, 0, 12, 0);
     h->setSpacing(10);
 
-    // Marca: logo branco + "SOFTEN" / "PHONE".
+    // Marca: logo oficial da Soften (cores originais) + "SOFTEN PHONE".
     auto* logo = new QLabel(this);
-    QImage img(":/assets/logo.png");
-    if (!img.isNull()) {
-        img = img.convertToFormat(QImage::Format_ARGB32);
-        for (int y = 0; y < img.height(); ++y) {
-            auto* line = reinterpret_cast<QRgb*>(img.scanLine(y));
-            for (int x = 0; x < img.width(); ++x) line[x] = qRgba(255, 255, 255, qAlpha(line[x]));
-        }
-        logo->setPixmap(QPixmap::fromImage(img).scaled(26, 26, Qt::KeepAspectRatio, Qt::SmoothTransformation));
-    }
+    QPixmap logoPix(":/assets/logo.png");
+    if (!logoPix.isNull())
+        logo->setPixmap(logoPix.scaled(28, 28, Qt::KeepAspectRatio, Qt::SmoothTransformation));
     logo->setAttribute(Qt::WA_TransparentForMouseEvents);
     h->addWidget(logo);
 
@@ -102,18 +127,24 @@ TitleBar::TitleBar(QWidget* parent) : QWidget(parent) {
     brandBox->setSpacing(0);
     brandBox->addStretch();
     brandBox->addWidget(mkLabel(QStringLiteral("SOFTEN PHONE"), fontPanelTitle(11.5), Qt::white));
-    brandBox->addWidget(mkLabel(QStringLiteral("SIGNAL ARCHITECTURE"), fontBrandSub(6.5),
-                                QColor(0x9F, 0xD4, 0xF0)));
+    // Campanha: subtitulo "RUMO AO HEXA 2026!!" em amarelo bandeira.
+    brandBox->addWidget(mkLabel(QStringLiteral("RUMO AO HEXA 2026!!"), fontBrandSub(7),
+                                QColor(0xFF, 0xDF, 0x00)));
     brandBox->addStretch();
     h->addLayout(brandBox);
 
     h->addStretch();
 
+    // Bandeira do Brasil entre o titulo e a pilula de ramal.
+    h->addWidget(new BrazilFlag(this), 0, Qt::AlignVCenter);
+    h->addSpacing(8);
+
     m_pill = new RegPill(this);
     h->addWidget(m_pill);
     h->addSpacing(8);
 
-    // Chrome: minimizar / maximizar / fechar.
+    // Chrome: apenas fechar. Nao ha minimizar (esconder e proibido) e a janela
+    // nao pode ser arrastada/movida — anti-esconder.
     auto mkChrome = [this](const QString& g, const QColor& hov) {
         auto* b = new QPushButton(g, this);
         b->setFont(iconPx(11));
@@ -124,11 +155,9 @@ TitleBar::TitleBar(QWidget* parent) : QWidget(parent) {
             "QPushButton:hover{background:%1;color:#ffffff;}").arg(hov.name()));
         return b;
     };
-    m_min   = mkChrome(QString(QChar(0xE921)), QColor(255, 255, 255, 38));
     m_close = mkChrome(QString(QChar(0xE8BB)), QColor(0xE2, 0x45, 0x3D));
-    connect(m_min,   &QPushButton::clicked, this, &TitleBar::minimizeClicked);
     connect(m_close, &QPushButton::clicked, this, &TitleBar::closeClicked);
-    h->addWidget(m_min); h->addWidget(m_close);
+    h->addWidget(m_close);
 }
 
 void TitleBar::setRegistered(bool ok, const QString& text) { m_pill->setRegistered(ok, text); }
@@ -137,7 +166,7 @@ void TitleBar::setLocked(bool locked) {
     m_locked = locked;
     // Chrome desabilitado e esmaecido enquanto travado (chamada recebida).
     const double op = locked ? 0.35 : 1.0;
-    for (QPushButton* b : { m_min, m_close }) {
+    for (QPushButton* b : { m_close }) {
         if (!b) continue;
         b->setEnabled(!locked);
         auto* eff = qobject_cast<QGraphicsOpacityEffect*>(b->graphicsEffect());
@@ -149,32 +178,26 @@ void TitleBar::setLocked(bool locked) {
 void TitleBar::paintEvent(QPaintEvent*) {
     QPainter g(this);
     g.setRenderHint(QPainter::Antialiasing);
-    QLinearGradient grad(0, 0, width(), height());
-    grad.setColorAt(0.0,  sig().navyA);
-    grad.setColorAt(0.55, sig().navyB);
-    grad.setColorAt(1.0,  sig().navyC);
+    // Header grafite (esq -> dir).
+    QLinearGradient grad(0, 0, width(), 0);
+    grad.setColorAt(0.0,  QColor(0x1C, 0x1D, 0x22));
+    grad.setColorAt(0.5,  QColor(0x24, 0x25, 0x2B));
+    grad.setColorAt(1.0,  QColor(0x2C, 0x2D, 0x34));
     g.fillRect(rect(), grad);
+
+    // Faixa tricolor (3px) na base do header: azul full, amarelo ~67%, verde ~33%
+    // (camadas sobrepostas) — cores saturadas p/ contrastar com o grafite.
+    const double w = width();
+    const QRectF base(0, height() - 3, w, 3);
+    g.setPen(Qt::NoPen);
+    g.setOpacity(0.90); g.fillRect(base, QColor(0x25, 0x63, 0xEB));                       // azul
+    g.setOpacity(0.80); g.fillRect(QRectF(0, base.top(), w * 0.67, 3), QColor(0xFF, 0xD4, 0x00)); // amarelo
+    g.setOpacity(0.90); g.fillRect(QRectF(0, base.top(), w * 0.33, 3), QColor(0x00, 0xC2, 0x4D)); // verde
+    g.setOpacity(1.0);
 }
 
-void TitleBar::mousePressEvent(QMouseEvent* e) {
-    if (m_locked) return;                       // travada: sem arrastar
-    if (e->button() == Qt::LeftButton) {
-        m_dragging = true;
-        m_dragOffset = e->globalPosition().toPoint() - window()->frameGeometry().topLeft();
-    }
-}
-void TitleBar::mouseMoveEvent(QMouseEvent* e) {
-    if (m_locked || !m_dragging || !(e->buttons() & Qt::LeftButton)) return;
-    QWidget* w = window();
-    QPoint target = e->globalPosition().toPoint() - m_dragOffset;
-    // Trava de seguranca: a janela nunca sai da area visivel (esconder arrastando).
-    if (QScreen* scr = w->screen()) {
-        const QRect a = scr->availableGeometry();
-        target.setX(std::clamp(target.x(), a.left(), std::max(a.left(), a.right()  - w->width())));
-        target.setY(std::clamp(target.y(), a.top(),  std::max(a.top(),  a.bottom() - w->height())));
-    }
-    w->move(target);
-}
+// A janela nao pode ser arrastada pela barra de titulo (anti-esconder): sem
+// handlers de mouse, a TitleBar nao move o top-level.
 
 // ===========================================================================
 //  NavRail
@@ -194,10 +217,10 @@ NavRail::NavRail(QWidget* parent) : QWidget(parent) {
         b->setFixedSize(48, 44);
         b->glyph = glyph;
         b->glyphSize = 17;
-        b->idleGlyph = textTertiary();
+        b->idleGlyph = QColor(0x7A, 0x7B, 0x82);          // cinza grafite
         b->idleFill = Qt::transparent;
-        b->activeFill = blend(sig().cyan, bodyBg(), 0.80);
-        b->activeGlyph = sig().cyan;
+        b->activeFill = QColor(0x2A, 0x25, 0x19);          // dourado bem escuro
+        b->activeGlyph = QColor(0xD4, 0xAF, 0x37);         // dourado
         b->setActive(active);
         return b;
     };
@@ -214,23 +237,24 @@ NavRail::NavRail(QWidget* parent) : QWidget(parent) {
 
     v->addStretch();
 
-    auto* theme = mkItem(isDark() ? glyph::Sun : glyph::Moon, false);
-    connect(theme, &RoundGlyphButton::clicked, this, &NavRail::toggleTheme);
-    v->addWidget(theme, 0, Qt::AlignHCenter);
+    // Botao de tema (claro/escuro) removido por ora — tema fixo grafite.
+    // O sinal toggleTheme permanece para quando voltar.
 
     v->addSpacing(6);
-    m_badge = new QLabel(QStringLiteral("··"), this);
+    // Avatar do usuario (silhueta). O ramal agora aparece na pilula do header.
+    m_badge = new QLabel(glyph::Contact, this);
     m_badge->setFixedSize(40, 40);
     m_badge->setAlignment(Qt::AlignCenter);
-    m_badge->setFont(fontPanelTitle(11));
+    m_badge->setFont(iconPx(18));
     m_badge->setStyleSheet(QStringLiteral(
-        "color:#ffffff;background:%1;border-radius:20px;").arg(sig().cyan.name()));
+        "color:#dceaf5;"
+        "background:qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #4a4226, stop:1 #2a2519);"
+        "border:2px solid #d4af37;border-radius:20px;"));
     v->addWidget(m_badge, 0, Qt::AlignHCenter);
 }
 
-void NavRail::setRamal(const QString& ramal) {
-    const QString r = ramal.trimmed();
-    m_badge->setText(r.isEmpty() ? QStringLiteral("··") : r.right(2));
+void NavRail::setRamal(const QString& /*ramal*/) {
+    // Avatar fixo (silhueta); o ramal e exibido na pilula de registro do header.
 }
 
 void NavRail::setActive(Active a) {
@@ -241,8 +265,12 @@ void NavRail::setActive(Active a) {
 
 void NavRail::paintEvent(QPaintEvent*) {
     QPainter g(this);
-    g.fillRect(rect(), sig().rail);
-    g.setPen(QPen(sig().railBorder, 1));
+    // Sidebar grafite quase preto (gradiente vertical sutil).
+    QLinearGradient grad(0, 0, 0, height());
+    grad.setColorAt(0.0, QColor(0x0D, 0x0E, 0x11));
+    grad.setColorAt(1.0, QColor(0x0A, 0x0B, 0x0D));
+    g.fillRect(rect(), grad);
+    g.setPen(QPen(QColor(0x1A, 0x1B, 0x1F), 1));
     g.drawLine(width() - 1, 0, width() - 1, height());
 }
 
@@ -259,11 +287,10 @@ DialerPanel::DialerPanel(QWidget* parent) : QWidget(parent) {
     head->setContentsMargins(0, 0, 0, 0);
     auto* titleBox = new QVBoxLayout();
     titleBox->setSpacing(2);
-    titleBox->addWidget(mkLabel(QStringLiteral("Discador"), fontPanelTitle(17), textPrimary()));
-    titleBox->addWidget(mkLabel(QStringLiteral("TECLADO · SIP/RTP"), fontTelemetry(8), sig().accentSub));
+    titleBox->addWidget(mkLabel(QStringLiteral("Discador"), fontPanelTitle(17), QColor(0xEE, 0xF4, 0xFB)));
+    titleBox->addWidget(mkLabel(QStringLiteral("TECLADO · SIP/RTP"), fontTelemetry(8), QColor(0x8A, 0x8B, 0x92)));
     head->addLayout(titleBox);
     head->addStretch();
-    head->addWidget(mkMarker(QStringLiteral("— 01"), this), 0, Qt::AlignTop);
     v->addLayout(head);
     v->addSpacing(20);
 
@@ -272,15 +299,19 @@ DialerPanel::DialerPanel(QWidget* parent) : QWidget(parent) {
     card->setObjectName("DialDisplay");
     card->setFixedHeight(66);
     card->setStyleSheet(QStringLiteral(
-        "#DialDisplay{background:%1;border:1px solid %2;border-radius:%3px;}")
-        .arg(panelGray().name(), border().name()).arg(dim::CardRadius));
+        "#DialDisplay{background:qlineargradient(x1:0,y1:0,x2:1,y2:0,"
+        " stop:0 #1d1e23, stop:1 #17181c);border:1px solid #34353c;border-radius:%1px;}")
+        .arg(dim::CardRadius));
     auto* ch = new QHBoxLayout(card);
     ch->setContentsMargins(18, 6, 10, 6);
     m_display = new QLineEdit(card);
     m_display->setFont(fontDisplay(23));
     m_display->setPlaceholderText(QStringLiteral("número"));
     m_display->setStyleSheet(QStringLiteral(
-        "QLineEdit{background:transparent;border:none;color:%1;}").arg(textPrimary().name()));
+        "QLineEdit{background:transparent;border:none;color:#eef4fb;}"));
+    QPalette dp = m_display->palette();
+    dp.setColor(QPalette::PlaceholderText, QColor(0x5A, 0x5B, 0x62));
+    m_display->setPalette(dp);
     m_display->setValidator(new QRegularExpressionValidator(
         QRegularExpression(QStringLiteral("[0-9*#+ ]*")), m_display));
     connect(m_display, &QLineEdit::returnPressed, this, &DialerPanel::callRequested);
@@ -331,7 +362,9 @@ DialerPanel::DialerPanel(QWidget* parent) : QWidget(parent) {
     actions->addStretch();
     m_call = new CallButton(this);
     m_call->setFixedSize(72, 72);
-    m_call->base = sig().cyan;
+    m_call->top  = QColor(0xF5, 0xD7, 0x7A);   // dourado claro (topo)
+    m_call->base = QColor(0xD4, 0xAF, 0x37);   // dourado (base)
+    m_call->glyphColor = QColor(0x15, 0x16, 0x1A);  // handset escuro sobre o dourado
     m_call->glyph = glyph::Phone;
     m_call->glow = false;          // sem halo/fade em volta
     connect(m_call, &CallButton::clicked, this, &DialerPanel::callRequested);
@@ -358,7 +391,11 @@ void DialerPanel::append(const QString& s) {
 
 void DialerPanel::paintEvent(QPaintEvent*) {
     QPainter g(this);
-    g.fillRect(rect(), bodyBg());
+    QLinearGradient bg(rect().topLeft(), rect().bottomLeft());
+    bg.setColorAt(0.0, QColor(0x15, 0x16, 0x1a));
+    bg.setColorAt(0.5, QColor(0x19, 0x1a, 0x1f));
+    bg.setColorAt(1.0, QColor(0x10, 0x11, 0x15));
+    g.fillRect(rect(), bg);
 }
 
 bool DialerPanel::eventFilter(QObject* watched, QEvent* event) {
@@ -714,7 +751,11 @@ void RecentsPanel::clearTelemetry() {
 
 void RecentsPanel::paintEvent(QPaintEvent*) {
     QPainter g(this);
-    g.fillRect(rect(), bodyBg());
+    QLinearGradient bg(rect().topLeft(), rect().bottomLeft());
+    bg.setColorAt(0.0, QColor(0x15, 0x16, 0x1a));
+    bg.setColorAt(0.5, QColor(0x19, 0x1a, 0x1f));
+    bg.setColorAt(1.0, QColor(0x10, 0x11, 0x15));
+    g.fillRect(rect(), bg);
 }
 
 // ===========================================================================
@@ -764,23 +805,8 @@ SettingsPanel::SettingsPanel(SipConfig* config, QWidget* parent)
     field(QStringLiteral("Ramal"), false, m_user);
     field(QStringLiteral("Senha"), true, m_pass);
 
-    v->addSpacing(6);
-    section(QStringLiteral("Aparência"));
-    {
-        auto* card = new QWidget(this);
-        card->setObjectName("ThemeCard");
-        card->setFixedHeight(48);
-        card->setStyleSheet(QStringLiteral(
-            "#ThemeCard{background:%1;border:1px solid %2;border-radius:%3px;}")
-            .arg(panelGray().name(), border().name()).arg(dim::CardRadius));
-        auto* ch = new QHBoxLayout(card);
-        ch->setContentsMargins(14, 0, 12, 0);
-        ch->addWidget(mkLabel(QStringLiteral("Tema escuro"), fontLabel(11), textPrimary()));
-        ch->addStretch();
-        m_dark = new ToggleSwitch(card);
-        ch->addWidget(m_dark);
-        v->addWidget(card);
-    }
+    // Secao "Aparência" (alternar claro/escuro) removida por ora — tema fixo
+    // grafite. Voltara no futuro.
 
     v->addSpacing(16);
     section(QStringLiteral("Atualização"));
@@ -834,7 +860,6 @@ SettingsPanel::SettingsPanel(SipConfig* config, QWidget* parent)
         m_config->server    = m_server->text().trimmed();
         m_config->username  = m_user->text().trimmed();
         m_config->password  = m_pass->text();
-        m_config->darkTheme = m_dark->isChecked();
         emit saved();
     });
     foot->addWidget(cancel);
@@ -849,12 +874,15 @@ void SettingsPanel::loadConfig() {
     m_server->setText(m_config->server);
     m_user->setText(m_config->username);
     m_pass->setText(m_config->password);
-    m_dark->setChecked(m_config->darkTheme);
 }
 
 void SettingsPanel::paintEvent(QPaintEvent*) {
     QPainter g(this);
-    g.fillRect(rect(), bodyBg());
+    QLinearGradient bg(rect().topLeft(), rect().bottomLeft());
+    bg.setColorAt(0.0, QColor(0x15, 0x16, 0x1a));
+    bg.setColorAt(0.5, QColor(0x19, 0x1a, 0x1f));
+    bg.setColorAt(1.0, QColor(0x10, 0x11, 0x15));
+    g.fillRect(rect(), bg);
 }
 
 }  // namespace sphone

@@ -43,7 +43,9 @@ class CallButton : public QWidget {
     Q_OBJECT
 public:
     explicit CallButton(QWidget* parent = nullptr);
-    QColor  base;                 // sig().cyan (ligar) ou sig().red (encerrar)
+    QColor  base;                 // cor inferior do gradiente (ligar/encerrar)
+    QColor  top;                  // cor superior do gradiente; invalida = auto (clareia base)
+    QColor  glyphColor = Qt::white;  // cor do glifo (ex.: escuro sobre o dourado)
     QString glyph;
     double  glyphSize = 26;
     double  glyphRotation = 0;    // 135 = handset "no gancho" (encerrar)

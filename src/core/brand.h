@@ -67,13 +67,14 @@ inline Palette lightPalette() {
 }
 
 inline Palette darkPalette() {
+    // Campanha "Rumo ao Hexa": base grafite premium (substitui o azul escuro).
     return {
-        QColor(0x12, 0x1C, 0x2A),   // bodyBg     surface (painel elevado)
-        QColor(0x16, 0x21, 0x2F),   // panelGray  keyFill (teclas/cards)
-        QColor(0x24, 0x35, 0x49),   // border     keyStroke
-        QColor(0xEA, 0xF2, 0xFB),   // textPrimary   ink near-white
-        QColor(0x9F, 0xB4, 0xCC),   // textSecondary inkSoft
-        QColor(0x5F, 0x74, 0x8D),   // textTertiary  inkMute
+        QColor(0x15, 0x16, 0x1a),   // bodyBg     grafite base
+        QColor(0x1d, 0x1e, 0x23),   // panelGray  cartoes/campos grafite
+        QColor(0x34, 0x35, 0x3c),   // border     grafite
+        QColor(0xEE, 0xF4, 0xFB),   // textPrimary   branco
+        QColor(0x8A, 0x8B, 0x92),   // textSecondary cinza
+        QColor(0x7A, 0x7B, 0x82),   // textTertiary  cinza
     };
 }
 
@@ -116,19 +117,20 @@ inline SigTokens sigLight() {
 }
 
 inline SigTokens sigDark() {
+    // Campanha: base grafite + acento dourado (#d4af37) no lugar do ciano.
     return {
-        QColor(0x07, 0x0D, 0x16),   // appBg
-        QColor(0x0B, 0x13, 0x1E),   // rail
-        QColor(0x1E, 0x2C, 0x3D),   // railBorder
-        QColor(0x1F, 0xB6, 0xEF),   // cyan
-        QColor(0x5F, 0xD0, 0xFF),   // cyanLight
-        QColor(0x1F, 0xB6, 0xEF),   // accentSub
-        QColor(0x22, 0xC9, 0x8A),   // green
-        QColor(0xFF, 0x52, 0x49),   // red
-        QColor(0x0A, 0x5D, 0xC4), QColor(0x01, 0x31, 0x68), QColor(0x00, 0x13, 0x2E),  // navy
-        QColor(0x08, 0x23, 0x3F), QColor(0x04, 0x16, 0x2C), QColor(0x00, 0x13, 0x2E),  // field
-        QColor(0xEA, 0xF2, 0xFB),   // onField
-        QColor(0x9F, 0xB4, 0xCC),   // onFieldSub
+        QColor(0x10, 0x11, 0x15),   // appBg     grafite
+        QColor(0x0D, 0x0E, 0x11),   // rail      sidebar quase preto
+        QColor(0x1A, 0x1B, 0x1F),   // railBorder
+        QColor(0xD4, 0xAF, 0x37),   // cyan      -> dourado (acao primaria)
+        QColor(0xF5, 0xD7, 0x7A),   // cyanLight -> dourado claro
+        QColor(0x8A, 0x8B, 0x92),   // accentSub -> cinza (sublabels tecnicas)
+        QColor(0x33, 0xE0, 0xA0),   // green     status/atender
+        QColor(0xFF, 0x52, 0x49),   // red       encerrar/erro
+        QColor(0x1C, 0x1D, 0x22), QColor(0x24, 0x25, 0x2B), QColor(0x2C, 0x2D, 0x34),  // navy (header grafite)
+        QColor(0x1d, 0x1e, 0x23), QColor(0x19, 0x1a, 0x1f), QColor(0x15, 0x16, 0x1a),  // field (campo de chamada grafite)
+        QColor(0xEE, 0xF4, 0xFB),   // onField    branco
+        QColor(0x8A, 0x8B, 0x92),   // onFieldSub cinza
     };
 }
 

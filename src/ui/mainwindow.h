@@ -68,9 +68,6 @@ private:
     void startMeter();     void stopMeter();      // alimenta o waveform
     void startStats();     void stopStats();      // telemetria do rodape
 
-    // anti-esconder: a janela foge do cursor ao se aproximar da barra de titulo
-    void startEvasion(); void evadeTick(); void fleeFromCursor();
-
     // chamada recebida / janela
     void startRing(); void stopRing();
     void bringToForeground(); void keepRingingOnTop();
@@ -102,7 +99,6 @@ private:
     QTimer*   m_callTimer = nullptr; QDateTime m_callStart;
     QTimer*   m_meterTimer = nullptr; float m_levelShown = 0;
     QTimer*   m_statsTimer = nullptr;
-    QTimer*   m_evadeTimer = nullptr;       // rastreia o cursor p/ fazer a janela fugir
 
     QSystemTrayIcon* m_tray = nullptr;
     Tones*        m_tones = nullptr;

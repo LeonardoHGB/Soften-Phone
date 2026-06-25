@@ -14,7 +14,6 @@
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QFrame>
-#include <QSizeGrip>
 #include <QTimer>
 #include <QSystemTrayIcon>
 #include <QMenu>
@@ -28,7 +27,6 @@
 #include <QShowEvent>
 #include <QPainter>
 #include <QPainterPath>
-#include <QCursor>
 #include <QEvent>
 #include <algorithm>
 
@@ -37,6 +35,7 @@
 #    define NOMINMAX
 #  endif
 #  include <windows.h>
+#  include <dwmapi.h>
 #endif
 
 using namespace brand;
@@ -57,6 +56,7 @@ namespace sphone {
 
 MainWindow::MainWindow(QWidget* parent) : QWidget(parent) {
     m_config = SipConfig::load();
+    m_config.darkTheme = true;   // tema fixo grafite (toggle claro/escuro removido)
     setWindowTitle(QStringLiteral("Soften Phone"));
     setWindowIcon(QIcon(":/assets/logo.ico"));
     setWindowFlag(Qt::FramelessWindowHint, true);
@@ -72,7 +72,6 @@ MainWindow::MainWindow(QWidget* parent) : QWidget(parent) {
     buildShell();
     buildTray();
     centerOnScreen();
-    startEvasion();
 
     sphone::diag::log("MainWindow (shell desktop) criada.");
 
@@ -113,7 +112,10 @@ void MainWindow::buildShell() {
     // Fundo da area de conteudo = superficie do painel, para que o espaco vazio
     // ao redor do discador (quando sozinho) nao apareca como "faixas pretas".
     m_content->setObjectName("ContentArea");
-    m_content->setStyleSheet(QStringLiteral("#ContentArea{background:%1;}").arg(bodyBg().name()));
+    // Campanha "Rumo ao Hexa" — base grafite escura premium (gradiente vertical).
+    m_content->setStyleSheet(QStringLiteral(
+        "#ContentArea{background:qlineargradient(x1:0,y1:0,x2:0,y2:1,"
+        " stop:0 #15161a, stop:0.5 #191a1f, stop:1 #101115);}"));
     auto* h = new QHBoxLayout(m_content);
     h->setContentsMargins(0, 0, 0, 0);
     h->setSpacing(0);
@@ -139,10 +141,8 @@ void MainWindow::buildShell() {
     h->addWidget(m_settings, 1);
     root->addWidget(m_content, 1);
 
-    // Grip de redimensionamento (canto inferior direito).
-    auto* grip = new QSizeGrip(this);
-    grip->setFixedSize(16, 16);
-    grip->raise();
+    // Sem grip de redimensionamento: a janela tem tamanho fixo (anti-esconder /
+    // layout estavel). A largura muda so por codigo ao encaixar Recentes/Config.
 
     wirePanels();
     updateLayout();   // estado inicial: somente discador (centralizado)
@@ -150,9 +150,7 @@ void MainWindow::buildShell() {
 }
 
 void MainWindow::wirePanels() {
-    // Minimizar nao esconde: a janela "muda de lado" em vez de ir pra barra de tarefas.
-    connect(m_titleBar, &TitleBar::minimizeClicked, this, [this] { fleeFromCursor(); });
-    connect(m_titleBar, &TitleBar::closeClicked,    this, [this] { close(); });
+    connect(m_titleBar, &TitleBar::closeClicked, this, [this] { close(); });
 
     connect(m_nav, &NavRail::goHome, this, [this] {
         if (m_windowLocked) return;
@@ -384,7 +382,9 @@ void MainWindow::updatePill() {
     if (!m_titleBar) return;
     const LS st = m_sip ? m_sip->state() : LS::Offline;
     bool ok = m_registered && (st == LS::Idle || st == LS::Calling || st == LS::InCall || st == LS::Ringing);
-    QString text = ok ? QStringLiteral("REGISTRADO")
+    // Registrado mostra o ramal logado (campanha); demais estados, o status.
+    const QString ramal = m_config.username.trimmed();
+    QString text = ok ? (ramal.isEmpty() ? QStringLiteral("REGISTRADO") : ramal)
                  : st == LS::Registering ? QStringLiteral("CONECTANDO")
                  : st == LS::Offline ? QStringLiteral("OFFLINE")
                  : m_lastStatus.toUpper();
@@ -509,47 +509,6 @@ void MainWindow::flashWindow(bool start) {
 }
 
 // =====================================================================
-//  Anti-esconder: a janela foge do cursor perto da barra de titulo
-// =====================================================================
-// O usuario nao pode arrastar a janela para fora da tela nem minimizar para
-// "sumir" com o softphone. Sempre que o cursor chega perto da barra de titulo
-// (unica regiao que arrasta/minimiza), a janela salta para o canto oposto,
-// 100% dentro da area visivel — fica impossivel agarrar para mover ou esconder.
-void MainWindow::startEvasion() {
-    if (m_evadeTimer) return;
-    m_evadeTimer = new QTimer(this);
-    m_evadeTimer->setInterval(20);            // ~50 Hz: pega o cursor antes de pousar na barra
-    connect(m_evadeTimer, &QTimer::timeout, this, [this] { evadeTick(); });
-    m_evadeTimer->start();
-}
-
-void MainWindow::evadeTick() {
-    if (m_windowLocked) return;               // chamada recebida: janela presa no centro
-    if (!isVisible() || (windowState() & Qt::WindowMinimized)) return;
-    // Zona sensivel = barra de titulo (coords globais) com folga. Mexer no corpo
-    // (discador, nav, paineis) fica abaixo dela e nao dispara a fuga.
-    const int margin = 26;
-    const QRect bar(mapToGlobal(QPoint(0, 0)), QSize(width(), dim::TitleBarH));
-    if (bar.adjusted(-margin, -margin, margin, margin).contains(QCursor::pos()))
-        fleeFromCursor();
-}
-
-void MainWindow::fleeFromCursor() {
-    if (m_windowLocked) return;
-    QScreen* scr = screen() ? screen() : QApplication::primaryScreen();
-    if (!scr) return;
-    const QRect a = scr->availableGeometry();
-    const QPoint c = QCursor::pos();
-    const int W = width(), H = height();
-    // Vai para o canto horizontal/vertical oposto ao cursor e trava dentro da tela.
-    int nx = (c.x() < a.center().x()) ? a.right()  - W - 8 : a.left() + 8;
-    int ny = (c.y() < a.center().y()) ? a.bottom() - H - 8 : a.top()  + 8;
-    nx = std::clamp(nx, a.left(), std::max(a.left(), a.right()  - W));
-    ny = std::clamp(ny, a.top(),  std::max(a.top(),  a.bottom() - H));
-    move(nx, ny);
-}
-
-// =====================================================================
 //  Bandeja / saida / config / janela
 // =====================================================================
 void MainWindow::buildTray() {
@@ -631,13 +590,28 @@ void MainWindow::centerOnScreen() {
 }
 
 // =====================================================================
-//  Janela: mascara arredondada, fechar -> bandeja
+//  Janela: cantos arredondados, fechar -> bandeja
 // =====================================================================
 void MainWindow::applyRoundedMask() {
+#ifdef Q_OS_WIN
+    // Windows 11: cantos arredondados nativos do DWM — antialiased, sem o
+    // serrilhado da mascara 1-bit (QRegion). O DWM mantem reto quando maximizada.
+    clearMask();
+    const HWND hwnd = reinterpret_cast<HWND>(winId());
+    // DWMWA_WINDOW_CORNER_PREFERENCE (33) = DWMWCP_ROUND (2). Constantes locais
+    // para nao depender da versao do SDK.
+    const DWORD kCornerPref = 33, kRound = 2, kBorderColor = 34;
+    DWORD pref = kRound;
+    ::DwmSetWindowAttribute(hwnd, kCornerPref, &pref, sizeof(pref));
+    // Sem borda desenhada pelo DWM (DWMWA_COLOR_NONE).
+    COLORREF noBorder = 0xFFFFFFFE;
+    ::DwmSetWindowAttribute(hwnd, kBorderColor, &noBorder, sizeof(noBorder));
+#else
     if (isMaximized()) { clearMask(); return; }
     QPainterPath path;
     path.addRoundedRect(QRectF(0, 0, width(), height()), dim::WindowRadius, dim::WindowRadius);
     setMask(QRegion(path.toFillPolygon().toPolygon()));
+#endif
 }
 
 void MainWindow::resizeEvent(QResizeEvent* e) {
@@ -677,10 +651,10 @@ bool MainWindow::nativeEvent(const QByteArray&, void* message, qintptr* result) 
     auto* msg = static_cast<MSG*>(message);
     if (msg->message == WM_SYSCOMMAND) {
         const WPARAM cmd = msg->wParam & 0xFFF0;
-        // Minimizar e sempre bloqueado (menu do sistema, clique na barra de tarefas).
-        if (cmd == SC_MINIMIZE) { if (result) *result = 0; return true; }
-        // Chamada recebida trava tambem mover/maximizar nativos.
-        if (m_windowLocked && (cmd == SC_MOVE || cmd == SC_MAXIMIZE)) {
+        // Janela fixa e anti-esconder: bloqueia minimizar, mover, maximizar e
+        // redimensionar nativos (menu do sistema/Alt+Espaco, Win+setas, clique
+        // na barra de tarefas). O tamanho muda so por codigo (encaixe de paineis).
+        if (cmd == SC_MINIMIZE || cmd == SC_MOVE || cmd == SC_MAXIMIZE || cmd == SC_SIZE) {
             if (result) *result = 0;
             return true;
         }

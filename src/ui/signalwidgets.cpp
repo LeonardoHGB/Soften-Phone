@@ -53,24 +53,30 @@ void KeypadButton::paintEvent(QPaintEvent*) {
     QRectF c = inscribedCircle(QRectF(0, 0, width(), height()));
     c.adjust(1, 1, -1, -1);
 
-    QColor fill = m_down  ? blend(panelGray(), sig().cyan, 0.10)
-                : m_hover ? blend(panelGray(), Qt::white, isDark() ? 0.06 : 0.30)
-                          : panelGray();
-    g.setPen(QPen(border(), 1.0));
-    g.setBrush(fill);
+    // Tecla grafite com gradiente radial (centro mais claro). Hover clareia,
+    // press escurece levemente.
+    QColor cin(0x21, 0x22, 0x28), cout(0x17, 0x18, 0x1d);
+    if (m_down)       { cin = blend(cin, Qt::black, 0.06); cout = blend(cout, Qt::black, 0.06); }
+    else if (m_hover) { cin = blend(cin, Qt::white, 0.07); cout = blend(cout, Qt::white, 0.07); }
+    QRadialGradient rg(c.center(), c.width() * 0.62);
+    rg.setColorAt(0.0, cin);
+    rg.setColorAt(1.0, cout);
+    g.setPen(QPen(QColor(0x34, 0x35, 0x3c), 1.0));     // borda grafite
+    g.setBrush(rg);
     g.drawEllipse(c);
 
+    const QColor digitCol(0xEE, 0xF4, 0xFB), subCol(0x8A, 0x8B, 0x92);
     const double w = width(), h = height();
     if (!letters.isEmpty()) {
-        g.setPen(textPrimary());
+        g.setPen(digitCol);
         QFont fd = fontPanelTitle(h * 0.205);
         g.setFont(fd);
         g.drawText(QRectF(0, h * 0.16, w, h * 0.46), Qt::AlignCenter, keyChar);
-        g.setPen(textTertiary());
+        g.setPen(subCol);
         g.setFont(fontTelemetry(h * 0.075));
         g.drawText(QRectF(0, h * 0.60, w, h * 0.24), Qt::AlignCenter, spaceOut(letters));
     } else {
-        g.setPen(textPrimary());
+        g.setPen(digitCol);
         g.setFont(fontPanelTitle(h * 0.24));
         g.drawText(QRectF(0, 0, w, h), Qt::AlignCenter, keyChar);
     }
@@ -108,7 +114,7 @@ void CallButton::paintEvent(QPaintEvent*) {
     }
 
     QColor lo = base;
-    QColor hi = blend(base, Qt::white, 0.28);
+    QColor hi = top.isValid() ? top : blend(base, Qt::white, 0.28);
     if (!isEnabled()) { lo = blend(lo, Qt::white, 0.45); hi = blend(hi, Qt::white, 0.45); }
     else if (m_down)  { lo = blend(lo, Qt::black, 0.12); hi = blend(hi, Qt::black, 0.12); }
     else if (m_hover) { lo = blend(lo, Qt::white, 0.06); hi = blend(hi, Qt::white, 0.06); }
@@ -126,7 +132,7 @@ void CallButton::paintEvent(QPaintEvent*) {
     g.translate(body.center());
     if (glyphRotation != 0) g.rotate(glyphRotation);
     g.setFont(iconPx(int(glyphSize)));
-    g.setPen(Qt::white);
+    g.setPen(glyphColor);
     g.drawText(QRectF(-400, -400, 800, 800), Qt::AlignCenter, glyph.isEmpty() ? glyph::Phone : glyph);
     g.restore();
 }
@@ -319,9 +325,12 @@ void RegPill::setRegistered(bool ok, const QString& text) {
     m_ok = ok; m_text = text;
     updateGeometry(); update();
 }
+// Registrado mostra o ramal em destaque; os demais status, texto tecnico menor.
+static QFont pillFont(bool ok) { return ok ? fontPanelTitle(10.5) : fontTelemetry(8); }
+
 QSize RegPill::sizeHint() const {
-    QFontMetricsF fm(fontTelemetry(8));
-    return QSize(int(fm.horizontalAdvance(m_text) + 40), 26);
+    QFontMetricsF fm(pillFont(m_ok));
+    return QSize(int(fm.horizontalAdvance(m_text) + 44), 26);
 }
 void RegPill::paintEvent(QPaintEvent*) {
     QPainter g(this);
@@ -334,12 +343,18 @@ void RegPill::paintEvent(QPaintEvent*) {
     g.strokePath(path, QPen(QColor(255, 255, 255, 40), 1));
 
     const double dot = 8, dx = 14, midY = height() / 2.0;
+    const QColor statusCol = m_ok ? QColor(0x33, 0xE0, 0xA0) : sig().red;  // verde campanha
     g.setPen(Qt::NoPen);
-    g.setBrush(m_ok ? sig().green : sig().red);
+    if (m_ok) {                                 // halo sutil do ponto verde
+        QColor halo = statusCol; halo.setAlpha(64);
+        g.setBrush(halo);
+        g.drawEllipse(QRectF(dx - 3, midY - dot / 2.0 - 3, dot + 6, dot + 6));
+    }
+    g.setBrush(statusCol);
     g.drawEllipse(QRectF(dx, midY - dot / 2.0, dot, dot));
 
-    g.setFont(fontTelemetry(8));
-    g.setPen(QColor(0xCF, 0xEA, 0xFB));
+    g.setFont(pillFont(m_ok));
+    g.setPen(m_ok ? QColor(0xEA, 0xFF, 0xF2) : QColor(0xCF, 0xEA, 0xFB));
     g.drawText(QRectF(dx + dot + 7, 0, width() - (dx + dot + 7) - 12, height()),
                Qt::AlignVCenter | Qt::AlignLeft, m_text);
 }

@@ -34,27 +34,21 @@ struct SipConfig;
 
 // ---------------------------------------------------------------------------
 // TitleBar — barra navy com gradiente, marca, pilula de registro e chrome.
-// Arrasta a janela top-level; emite os gestos de janela.
+// Janela fixa: nao arrasta o top-level; expoe apenas o gesto de fechar.
 // ---------------------------------------------------------------------------
 class TitleBar : public QWidget {
     Q_OBJECT
 public:
     explicit TitleBar(QWidget* parent = nullptr);
     void setRegistered(bool ok, const QString& text);
-    void setLocked(bool locked);   // chamada recebida: sem drag + chrome desabilitado
+    void setLocked(bool locked);   // chamada recebida: chrome desabilitado
 signals:
-    void minimizeClicked();
     void closeClicked();
 protected:
     void paintEvent(QPaintEvent*) override;
-    void mousePressEvent(QMouseEvent*) override;
-    void mouseMoveEvent(QMouseEvent*) override;
 private:
     RegPill*     m_pill = nullptr;
-    QPushButton* m_min = nullptr;
     QPushButton* m_close = nullptr;
-    QPoint   m_dragOffset;
-    bool     m_dragging = false;
     bool     m_locked = false;
 };
 
@@ -196,7 +190,6 @@ private:
     QLineEdit*    m_server = nullptr;
     QLineEdit*    m_user = nullptr;
     QLineEdit*    m_pass = nullptr;
-    ToggleSwitch* m_dark = nullptr;
 };
 
 }  // namespace sphone

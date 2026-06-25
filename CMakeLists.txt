@@ -81,7 +81,7 @@ set_target_properties(SPHONE PROPERTIES OUTPUT_NAME "SPHONE")
 target_include_directories(SPHONE PRIVATE src)
 target_link_libraries(SPHONE PRIVATE
     Qt6::Widgets Qt6::Multimedia Qt6::Network
-    ws2_32 ole32 winmm crypt32 user32 advapi32 shell32)
+    ws2_32 ole32 winmm crypt32 user32 advapi32 shell32 dwmapi)
 
 # ---------------------------------------------------------------------------
 # PJSIP (quando SPHONE_WITH_PJSIP=ON). Linka as .lib estaticas geradas pelo
