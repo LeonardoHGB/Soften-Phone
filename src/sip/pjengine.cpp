@@ -221,6 +221,19 @@ int PjEngine::registerAccount(const QString& domain, const QString& user, const 
     acfg.cred_info[0].data      = pj_str(p.data());
     acfg.ka_interval = 15;   // keep-alive de NAT nativo
 
+    // SIP session timers (RFC 4028): rede de seguranca contra "chamada zumbi".
+    // Em deploy cross-subnet/VPN o BYE que o PABX envia quando o outro lado desliga
+    // as vezes NAO chega ao softphone (o caminho PABX->ramal perde o in-dialog) e,
+    // sem isto, a chamada fica ativa PARA SEMPRE no nosso lado. Com o timer ligado,
+    // a cada ~sess_expires/2 negociamos um refresh (re-INVITE/UPDATE): se o outro
+    // lado sumiu, o refresh recebe 481/timeout e a pilha DERRUBA a chamada sozinha.
+    // ALWAYS = roda o timer mesmo que o peer nao sinalize suporte (nao usa
+    // "Require: timer", entao nao quebra chamada) -> teardown garantido
+    // independente da config de session-timers do Asterisk.
+    acfg.use_timer = PJSUA_SIP_TIMER_ALWAYS;
+    acfg.timer_setting.min_se       = 90;    // minimo do RFC 4028 (segundos)
+    acfg.timer_setting.sess_expires = 120;   // refresh ~60s -> zumbi cai em ate ~2min
+
     // pjsua_acc_add copia a config -> buffers locais sao seguros.
     if (pjsua_acc_add(&acfg, PJ_TRUE, &g_acc) != PJ_SUCCESS) return -1;
     return (int)g_acc;
