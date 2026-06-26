@@ -151,6 +151,26 @@ int PjEngine::start(int port) {
     media_cfg.ec_tail_len = 200;   // ms; o AEC3 gerencia a cauda internamente
     media_cfg.ec_options  = PJMEDIA_ECHO_WEBRTC_AEC3 | PJMEDIA_ECHO_USE_NOISE_SUPPRESSOR;
 
+    // Mantem o device de audio "quente" por 30s apos a ultima chamada: elimina o
+    // warm-up (underflow + reset de jitter + re-prefetch do EC) que picotava o
+    // INICIO de cada atendimento ("corta quando alguem liga"). 30s (e nao -1)
+    // deixa o WMME re-vincular ao device default ATUAL caso o atendente troque de
+    // headset durante o turno, em vez de prender pra sempre o device do startup.
+    media_cfg.snd_auto_close_time = 30;
+
+    // TX continuo: desliga o VAD/silence-suppression local, que cortava o inicio
+    // das palavras na perna que ENVIAMOS (o cliente nos ouvindo). Em LAN o trafego
+    // continuo (G.711/GSM) e irrelevante.
+    media_cfg.no_vad = PJ_TRUE;
+
+    // Piso do jitter buffer de RECEPCAO (ms): suaviza a retomada de fala depois
+    // dos silencios que o Asterisk suprime. Nao cura o silence-suppression do PABX
+    // (pacote nunca enviado nao da pra bufferizar), so reduz o glitch da 1a silaba.
+    media_cfg.jb_init    = 80;
+    media_cfg.jb_min_pre = 40;
+    media_cfg.jb_max_pre = 160;
+    media_cfg.jb_max     = 240;
+
     if (pjsua_init(&cfg, &log_cfg, &media_cfg) != PJ_SUCCESS) { pjsua_destroy(); return -2; }
 
     pjsua_transport_config tcfg;
@@ -160,6 +180,26 @@ int PjEngine::start(int port) {
         pjsua_destroy(); return -3;
     }
     if (pjsua_start() != PJ_SUCCESS) { pjsua_destroy(); return -4; }
+
+    // Numa LAN sobra banda para G.711 (64kbps): forca PCMA/PCMU e DESABILITA o GSM
+    // (13kbps, lossy, com PLC pior) que o pjsua ofertava primeiro -> voz mais limpa.
+    // Em chamada SAINTE o Asterisk responde pela ordem do allow= DELE, entao apenas
+    // nao ofertar GSM ja garante G.711; em ENTRANTE quem responde somos nos, e a
+    // prioridade vale direto. O PABX anuncia PCMA(8) e PCMU(0), entao e seguro.
+    {
+        pj_str_t c;
+        c = pj_str((char*)"PCMA/8000");   pjsua_codec_set_priority(&c, 254);
+        c = pj_str((char*)"PCMU/8000");   pjsua_codec_set_priority(&c, 253);
+        c = pj_str((char*)"GSM/8000");    pjsua_codec_set_priority(&c, 0);
+        c = pj_str((char*)"speex/16000"); pjsua_codec_set_priority(&c, 0);
+        c = pj_str((char*)"speex/8000");  pjsua_codec_set_priority(&c, 0);
+        c = pj_str((char*)"iLBC/8000");   pjsua_codec_set_priority(&c, 0);
+    }
+
+    // Pre-aquece o dispositivo de audio + AEC3 ja no startup: assim a PRIMEIRA
+    // chamada nao paga o custo de abrir o device e instanciar o AEC3 (era a unica
+    // que demorava). Best-effort: se falhar, segue (abre na 1a chamada como antes).
+    pjsua_set_snd_dev(PJMEDIA_AUD_DEFAULT_CAPTURE_DEV, PJMEDIA_AUD_DEFAULT_PLAYBACK_DEV);
     return 0;
 }
 
