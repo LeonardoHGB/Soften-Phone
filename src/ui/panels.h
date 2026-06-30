@@ -12,12 +12,14 @@
 #include <QList>
 
 #include "data/callaudit.h"
+#include "sip/pjengine.h"   // AudioDevice
 
 class QLineEdit;
 class QLabel;
 class QVBoxLayout;
 class QButtonGroup;
 class QPushButton;
+class QComboBox;
 
 namespace sphone {
 
@@ -179,6 +181,9 @@ class SettingsPanel : public QWidget {
 public:
     explicit SettingsPanel(SipConfig* config, QWidget* parent = nullptr);
     void loadConfig();        // recarrega os campos a partir do config atual
+    // Preenche os combos de audio com os dispositivos do SO e seleciona os que
+    // estao no config. Lista vazia = so a opcao "Padrao do sistema".
+    void setAudioDevices(const QList<AudioDevice>& devices);
 signals:
     void saved();             // campos validos gravados no config
     void closed();            // cancelar/fechar
@@ -190,6 +195,8 @@ private:
     QLineEdit*    m_server = nullptr;
     QLineEdit*    m_user = nullptr;
     QLineEdit*    m_pass = nullptr;
+    QComboBox*    m_capture = nullptr;    // microfone
+    QComboBox*    m_playback = nullptr;   // alto-falante/fone
 };
 
 }  // namespace sphone

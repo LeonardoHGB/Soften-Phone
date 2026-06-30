@@ -163,7 +163,11 @@ void MainWindow::wirePanels() {
     connect(m_nav, &NavRail::toggleSettings, this, [this] {
         if (m_windowLocked) return;
         m_settingsOpen = !m_settingsOpen; m_recentsOpen = false;
-        if (m_settingsOpen) m_settings->loadConfig();
+        if (m_settingsOpen) {
+            m_settings->loadConfig();
+            // Lista os dispositivos do motor ativo (vazio se ainda nao registrado).
+            m_settings->setAudioDevices(m_sip ? m_sip->audioDevices() : QList<sphone::AudioDevice>());
+        }
         updateLayout();
     });
     connect(m_nav, &NavRail::toggleTheme,  this, [this] {

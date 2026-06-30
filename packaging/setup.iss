@@ -6,7 +6,7 @@
 #define MyExeName "SPHONE.exe"
 ; A versao pode vir por /DMyAppVersion=x.y.z (publish-release.ps1 a passa do version.h).
 #ifndef MyAppVersion
-  #define MyAppVersion "1.3.1"
+  #define MyAppVersion "1.3.4"
 #endif
 #define MyPublisher "Soften Sistemas"
 #define MyDist "..\dist"

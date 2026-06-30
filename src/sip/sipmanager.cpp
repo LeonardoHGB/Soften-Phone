@@ -46,11 +46,19 @@ void SipManager::start() {
     }
     m_started = true;
 
+    // Aplica os dispositivos de audio escolhidos (mic/alto-falante). Sobrescreve o
+    // pre-aquecimento com device default feito dentro de PjEngine::start.
+    m_pj->setSoundDevices(m_config.captureDevice, m_config.playbackDevice);
+
     int acc = m_pj->registerAccount(domain(), m_config.username, m_config.password);
     if (acc < 0) {
         emit statusMessage(QStringLiteral("Falha ao configurar o registro do ramal."));
         setState(LineState::Offline);
     }
+}
+
+QList<AudioDevice> SipManager::audioDevices() {
+    return m_pj->audioDevices();   // [] enquanto o motor nao foi iniciado
 }
 
 // =====================================================================

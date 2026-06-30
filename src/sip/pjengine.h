@@ -11,8 +11,18 @@
 //
 #include <QObject>
 #include <QString>
+#include <QList>
 
 namespace sphone {
+
+// Um dispositivo de audio enumerado do PJSIP. Um mesmo device pode servir para
+// captura E reproducao (capture && playback), ou so um dos dois.
+struct AudioDevice {
+    int     id = -1;          // indice PJMEDIA (informativo; a config grava o nome)
+    QString name;
+    bool    capture  = false; // tem entrada (microfone)
+    bool    playback = false; // tem saida (alto-falante/fone)
+};
 
 class PjEngine : public QObject {
     Q_OBJECT
@@ -39,6 +49,12 @@ public:
     int  transfer(int callId, const QString& domain, const QString& dest); // 0 / -1 (REFER)
     void mute(int callId, bool mute);
     int  getLevel(int callId, int* tx, int* rx);  // 0 ok / -1 (0..255)
+
+    // Dispositivos de audio. audioDevices() faz re-scan e lista o que o SO expoe
+    // (vazio se o motor nao esta iniciado). setSoundDevices() resolve os NOMES para
+    // indices e aplica; nome vazio / nao encontrado cai no padrao do sistema.
+    QList<AudioDevice> audioDevices();
+    void setSoundDevices(const QString& captureName, const QString& playbackName);
 
     // Call-ID SIP da chamada (string do cabecalho). Vazio se indisponivel. Em
     // grupos de toque com proxy que forka, todas as pernas veem o mesmo valor.

@@ -20,8 +20,12 @@ PjEngine::~PjEngine() { shutdown(); }
 
 namespace {
 
-sphone::PjEngine* g_self = nullptr;
-pjsua_acc_id      g_acc  = PJSUA_INVALID_ID;
+sphone::PjEngine* g_self  = nullptr;
+pjsua_acc_id      g_acc   = PJSUA_INVALID_ID;
+// Estado de mudo da chamada ativa. Precisa ser visivel aos callbacks: re-INVITEs
+// (hold/unhold, session timers RFC 4028) disparam on_call_media_state de novo e
+// reconectariam o microfone, desfazendo o mudo silenciosamente.
+bool              g_muted = false;
 
 // Toda thread que chama a stack precisa estar registrada no PJLIB. As chamadas
 // vem da thread de UI (sempre a mesma); registramos uma vez por thread.
@@ -86,8 +90,11 @@ void cb_call_state(pjsua_call_id call_id, pjsip_event* e) {
     pjsua_call_info ci;
     int flags = 0;
     if (pjsua_call_get_info(call_id, &ci) == PJ_SUCCESS && g_self) {
-        if (ci.state == PJSIP_INV_STATE_DISCONNECTED && is_completed_elsewhere(e))
-            flags |= sphone::PjEngine::FlagCompletedElsewhere;
+        if (ci.state == PJSIP_INV_STATE_DISCONNECTED) {
+            g_muted = false;   // proxima chamada comeca sempre com o microfone aberto
+            if (is_completed_elsewhere(e))
+                flags |= sphone::PjEngine::FlagCompletedElsewhere;
+        }
         g_self->emitCallState((int)call_id, (int)ci.state, (int)ci.last_status, flags);
     }
 }
@@ -107,7 +114,8 @@ void cb_call_media_state(pjsua_call_id call_id) {
     if (pjsua_call_get_info(call_id, &ci) == PJ_SUCCESS &&
         ci.media_status == PJSUA_CALL_MEDIA_ACTIVE) {
         pjsua_conf_connect(ci.conf_slot, 0);   // remoto    -> alto-falante
-        pjsua_conf_connect(0, ci.conf_slot);   // microfone -> remoto
+        if (!g_muted)                          // respeita o mudo apos re-INVITE
+            pjsua_conf_connect(0, ci.conf_slot);   // microfone -> remoto
     }
 }
 
@@ -271,6 +279,7 @@ int PjEngine::transfer(int callId, const QString& domain, const QString& dest) {
 
 void PjEngine::mute(int callId, bool mute) {
     ensure_thread();
+    g_muted = mute;   // persiste para cb_call_media_state nao reverter num re-INVITE
     pjsua_call_info ci;
     if (pjsua_call_get_info((pjsua_call_id)callId, &ci) == PJ_SUCCESS &&
         ci.conf_slot != PJSUA_INVALID_ID) {
@@ -297,6 +306,54 @@ QString PjEngine::sipCallId(int callId) {
     pjsua_call_info ci;
     if (pjsua_call_get_info((pjsua_call_id)callId, &ci) != PJ_SUCCESS) return QString();
     return QString::fromUtf8(ci.call_id.ptr, (int)ci.call_id.slen);
+}
+
+QList<AudioDevice> PjEngine::audioDevices() {
+    QList<AudioDevice> out;
+    if (g_self != this) return out;        // motor nao iniciado por esta instancia
+    ensure_thread();
+
+    // Re-scan: capta headset plugado/desplugado depois do startup (o atendente abre
+    // Configuracoes justamente apos trocar de fone).
+    pjmedia_aud_dev_refresh();
+
+    pjmedia_aud_dev_info info[64];
+    unsigned count = PJ_ARRAY_SIZE(info);
+    if (pjsua_enum_aud_devs(info, &count) != PJ_SUCCESS) return out;
+
+    for (unsigned i = 0; i < count; ++i) {
+        AudioDevice d;
+        d.id       = (int)i;               // pjsua_enum_aud_devs lista por indice 0..n-1
+        d.name     = QString::fromUtf8(info[i].name);
+        d.capture  = info[i].input_count  > 0;
+        d.playback = info[i].output_count > 0;
+        out.append(d);
+    }
+    return out;
+}
+
+void PjEngine::setSoundDevices(const QString& captureName, const QString& playbackName) {
+    if (g_self != this) return;
+    ensure_thread();
+
+    pjmedia_aud_dev_index capId  = PJMEDIA_AUD_DEFAULT_CAPTURE_DEV;
+    pjmedia_aud_dev_index playId = PJMEDIA_AUD_DEFAULT_PLAYBACK_DEV;
+
+    if (!captureName.isEmpty() || !playbackName.isEmpty()) {
+        pjmedia_aud_dev_info info[64];
+        unsigned count = PJ_ARRAY_SIZE(info);
+        if (pjsua_enum_aud_devs(info, &count) == PJ_SUCCESS) {
+            for (unsigned i = 0; i < count; ++i) {
+                const QString n = QString::fromUtf8(info[i].name);
+                if (!captureName.isEmpty()  && info[i].input_count  > 0 && n == captureName)
+                    capId = (pjmedia_aud_dev_index)i;
+                if (!playbackName.isEmpty() && info[i].output_count > 0 && n == playbackName)
+                    playId = (pjmedia_aud_dev_index)i;
+            }
+        }
+    }
+    // Best-effort: se o device sumiu (id nao resolvido), segue com o default do SO.
+    pjsua_set_snd_dev(capId, playId);
 }
 
 bool PjEngine::getStats(int callId, QString& codec, int& clockRate, int& rttMs, int& lossPermil) {
@@ -358,6 +415,8 @@ void PjEngine::mute(int, bool)                                 {}
 int  PjEngine::getLevel(int, int*, int*)                       { return -1; }
 bool PjEngine::getStats(int, QString&, int&, int&, int&)       { return false; }
 QString PjEngine::sipCallId(int)                               { return QString(); }
+QList<AudioDevice> PjEngine::audioDevices()                    { return {}; }
+void PjEngine::setSoundDevices(const QString&, const QString&) {}
 
 }  // namespace sphone
 

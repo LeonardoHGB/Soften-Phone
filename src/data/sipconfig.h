@@ -19,6 +19,12 @@ struct SipConfig {
     int     keepAliveSeconds = 15;   // nao propagado; motor usa ka_interval=15 fixo
     bool    darkTheme = true;     // base da campanha "Rumo ao Hexa" e o tema escuro
 
+    // Dispositivos de audio escolhidos pelo atendente (gravados pelo NOME, nao pelo
+    // indice: o id muda entre boots / ao plugar-desplugar USB; o nome e estavel e
+    // portavel). Vazio = padrao do sistema (o motor cai em PJMEDIA_AUD_DEFAULT_*).
+    QString captureDevice;     // microfone (captura)
+    QString playbackDevice;    // alto-falante/fone (reproducao)
+
     bool isComplete() const {
         return !server.isEmpty() && !username.isEmpty() && !password.isEmpty();
     }

@@ -15,6 +15,7 @@
 #include <QLinearGradient>
 #include <QLineEdit>
 #include <QLabel>
+#include <QComboBox>
 #include <QPushButton>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -800,10 +801,34 @@ SettingsPanel::SettingsPanel(SipConfig* config, QWidget* parent)
         v->addSpacing(12);
     };
 
+    auto combo = [&](const QString& label, QComboBox*& out) {
+        v->addWidget(mkLabel(label, fontLabel(9.5), textSecondary()));
+        v->addSpacing(4);
+        out = new QComboBox(this);
+        out->setFont(fontLabel(11));
+        out->setFixedHeight(42);
+        out->setCursor(Qt::PointingHandCursor);
+        out->setStyleSheet(QStringLiteral(
+            "QComboBox{background:%1;border:1px solid %2;border-radius:%3px;padding:0 13px;color:%4;}"
+            "QComboBox:focus{border:1px solid %5;}"
+            "QComboBox::drop-down{border:none;width:26px;}"
+            "QComboBox QAbstractItemView{background:%1;border:1px solid %2;color:%4;"
+            "selection-background-color:%5;outline:none;}")
+            .arg(panelGray().name(), border().name()).arg(dim::CardRadius)
+            .arg(textPrimary().name(), sig().cyan.name()));
+        v->addWidget(out);
+        v->addSpacing(12);
+    };
+
     section(QStringLiteral("Conta"));
     field(QStringLiteral("Servidor"), false, m_server);
     field(QStringLiteral("Ramal"), false, m_user);
     field(QStringLiteral("Senha"), true, m_pass);
+
+    v->addSpacing(16);
+    section(QStringLiteral("Áudio"));
+    combo(QString::fromUtf8("Microfone (falar)"), m_capture);
+    combo(QString::fromUtf8("Alto-falante / fone (ouvir)"), m_playback);
 
     // Secao "Aparência" (alternar claro/escuro) removida por ora — tema fixo
     // grafite. Voltara no futuro.
@@ -857,9 +882,12 @@ SettingsPanel::SettingsPanel(SipConfig* config, QWidget* parent)
                 QString::fromUtf8("Preencha ao menos Servidor, Ramal e Senha."));
             return;
         }
-        m_config->server    = m_server->text().trimmed();
-        m_config->username  = m_user->text().trimmed();
-        m_config->password  = m_pass->text();
+        m_config->server         = m_server->text().trimmed();
+        m_config->username       = m_user->text().trimmed();
+        m_config->password       = m_pass->text();
+        // O nome do device fica em itemData; "" (Padrao do sistema) zera a escolha.
+        m_config->captureDevice  = m_capture  ? m_capture->currentData().toString()  : QString();
+        m_config->playbackDevice = m_playback ? m_playback->currentData().toString() : QString();
         emit saved();
     });
     foot->addWidget(cancel);
@@ -867,6 +895,7 @@ SettingsPanel::SettingsPanel(SipConfig* config, QWidget* parent)
     v->addLayout(foot);
 
     loadConfig();
+    setAudioDevices({});   // semeia "Padrao do sistema" + seleciona o do config
 }
 
 void SettingsPanel::loadConfig() {
@@ -874,6 +903,37 @@ void SettingsPanel::loadConfig() {
     m_server->setText(m_config->server);
     m_user->setText(m_config->username);
     m_pass->setText(m_config->password);
+}
+
+void SettingsPanel::setAudioDevices(const QList<AudioDevice>& devices) {
+    if (!m_capture || !m_playback) return;
+
+    // Reconstroi as duas listas. itemData() guarda o NOME do device (o que vai pro
+    // config); o item 0 e sempre "Padrao do sistema" com data vazia.
+    auto fill = [&](QComboBox* box, bool wantCapture, const QString& selected) {
+        box->blockSignals(true);
+        box->clear();
+        box->addItem(QString::fromUtf8("Padrão do sistema"), QString());
+        int pick = 0;
+        for (const AudioDevice& d : devices) {
+            const bool ok = wantCapture ? d.capture : d.playback;
+            if (!ok) continue;
+            box->addItem(d.name, d.name);
+            if (!selected.isEmpty() && d.name == selected)
+                pick = box->count() - 1;
+        }
+        // Device gravado some da lista (ex: USB desplugado): mostra mesmo assim,
+        // marcado, para o atendente entender por que o audio caiu no padrao.
+        if (pick == 0 && !selected.isEmpty()) {
+            box->addItem(selected + QString::fromUtf8("  (indisponível)"), selected);
+            pick = box->count() - 1;
+        }
+        box->setCurrentIndex(pick);
+        box->blockSignals(false);
+    };
+
+    fill(m_capture,  true,  m_config ? m_config->captureDevice  : QString());
+    fill(m_playback, false, m_config ? m_config->playbackDevice : QString());
 }
 
 void SettingsPanel::paintEvent(QPaintEvent*) {

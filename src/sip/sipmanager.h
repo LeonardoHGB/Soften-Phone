@@ -15,12 +15,11 @@
 
 #include "data/sipconfig.h"
 #include "data/callaudit.h"
+#include "sip/pjengine.h"   // AudioDevice
 
 class QTimer;
 
 namespace sphone {
-
-class PjEngine;
 
 // Telemetria de midia da chamada ativa (rodape do painel Recentes).
 struct MediaStats {
@@ -46,6 +45,7 @@ public:
     float micLevel()          { return readLevel(true); }
     float speakerLevel()      { return readLevel(false); }
     MediaStats mediaStats();  // telemetria da chamada ativa (invalida fora de InCall)
+    QList<AudioDevice> audioDevices();    // dispositivos de audio do SO ([] se offline)
 
     void start();                         // inicia o PJSIP e registra o ramal
     void answer();                        // atende a chamada de entrada

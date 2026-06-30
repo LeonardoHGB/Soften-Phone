@@ -72,6 +72,8 @@ SipConfig SipConfig::load() {
     c.expirySeconds    = o.value("ExpirySeconds").toInt(120);
     c.keepAliveSeconds = o.value("KeepAliveSeconds").toInt(15);
     c.darkTheme        = o.value("DarkTheme").toBool(true);
+    c.captureDevice    = o.value("CaptureDevice").toString();
+    c.playbackDevice   = o.value("PlaybackDevice").toString();
 
     const QString prot = o.value("PasswordProtected").toString();
     if (!prot.isEmpty()) c.password = unprotect(prot);
@@ -89,6 +91,8 @@ void SipConfig::save() const {
     o["ExpirySeconds"]     = expirySeconds;
     o["KeepAliveSeconds"]  = keepAliveSeconds;
     o["DarkTheme"]         = darkTheme;
+    o["CaptureDevice"]     = captureDevice;
+    o["PlaybackDevice"]    = playbackDevice;
 
     QFile f(paths::configFile());   // paths::dataDir() ja garante a pasta
     if (f.open(QIODevice::WriteOnly | QIODevice::Truncate))
