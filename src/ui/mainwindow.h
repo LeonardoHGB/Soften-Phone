@@ -54,7 +54,7 @@ private:
     void updateLayout();          // visibilidade dos paineis conforme estado/recentes
     void setWindowLocked(bool on);// trava janela (chamada recebida)
     void applyRoundedMask();
-    void centerOnScreen();
+    void anchorBottomRight();     // cola a janela no canto inferior direito da tela
 
     // SIP / estado
     void startSip();

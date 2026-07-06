@@ -72,37 +72,6 @@ QLabel* mkMarker(const QString& text, QWidget* parent) {
                    Qt::AlignRight | Qt::AlignVCenter, parent);
 }
 
-// Bandeira do Brasil simplificada (campanha "Rumo ao Hexa"): retangulo verde,
-// losango amarelo e circulo azul. Cantos arredondados + borda branca sutil.
-class BrazilFlag : public QWidget {
-public:
-    explicit BrazilFlag(QWidget* parent = nullptr) : QWidget(parent) {
-        setFixedSize(34, 23);
-        setAttribute(Qt::WA_TransparentForMouseEvents);
-    }
-protected:
-    void paintEvent(QPaintEvent*) override {
-        QPainter g(this);
-        g.setRenderHint(QPainter::Antialiasing);
-        const QRectF r(0.5, 0.5, width() - 1.0, height() - 1.0);
-        QPainterPath rp; rp.addRoundedRect(r, 3, 3);
-        g.fillPath(rp, QColor(0x00, 0x97, 0x39));            // verde fundo
-        const double cx = r.center().x(), cy = r.center().y();
-        const double ix = r.width() * 0.16, iy = r.height() * 0.16;
-        QPolygonF dia({ {cx, r.top() + iy}, {r.right() - ix, cy},
-                        {cx, r.bottom() - iy}, {r.left() + ix, cy} });
-        g.setPen(Qt::NoPen);
-        g.setBrush(QColor(0xFF, 0xDF, 0x00));                // losango amarelo
-        g.drawPolygon(dia);
-        const double cr = r.height() * 0.24;
-        g.setBrush(QColor(0x01, 0x21, 0x69));                // circulo azul
-        g.drawEllipse(QPointF(cx, cy), cr, cr);
-        g.setPen(QPen(QColor(255, 255, 255, 140), 1.0));     // borda branca sutil
-        g.setBrush(Qt::NoBrush);
-        g.drawPath(rp);
-    }
-};
-
 }  // namespace
 
 // ===========================================================================
@@ -128,17 +97,10 @@ TitleBar::TitleBar(QWidget* parent) : QWidget(parent) {
     brandBox->setSpacing(0);
     brandBox->addStretch();
     brandBox->addWidget(mkLabel(QStringLiteral("SOFTEN PHONE"), fontPanelTitle(11.5), Qt::white));
-    // Campanha: subtitulo "RUMO AO HEXA 2026!!" em amarelo bandeira.
-    brandBox->addWidget(mkLabel(QStringLiteral("RUMO AO HEXA 2026!!"), fontBrandSub(7),
-                                QColor(0xFF, 0xDF, 0x00)));
     brandBox->addStretch();
     h->addLayout(brandBox);
 
     h->addStretch();
-
-    // Bandeira do Brasil entre o titulo e a pilula de ramal.
-    h->addWidget(new BrazilFlag(this), 0, Qt::AlignVCenter);
-    h->addSpacing(8);
 
     m_pill = new RegPill(this);
     h->addWidget(m_pill);
@@ -186,15 +148,12 @@ void TitleBar::paintEvent(QPaintEvent*) {
     grad.setColorAt(1.0,  QColor(0x2C, 0x2D, 0x34));
     g.fillRect(rect(), grad);
 
-    // Faixa tricolor (3px) na base do header: azul full, amarelo ~67%, verde ~33%
-    // (camadas sobrepostas) — cores saturadas p/ contrastar com o grafite.
+    // Faixa tricolor (3px) na base do header: branco | azul | branco.
     const double w = width();
     const QRectF base(0, height() - 3, w, 3);
     g.setPen(Qt::NoPen);
-    g.setOpacity(0.90); g.fillRect(base, QColor(0x25, 0x63, 0xEB));                       // azul
-    g.setOpacity(0.80); g.fillRect(QRectF(0, base.top(), w * 0.67, 3), QColor(0xFF, 0xD4, 0x00)); // amarelo
-    g.setOpacity(0.90); g.fillRect(QRectF(0, base.top(), w * 0.33, 3), QColor(0x00, 0xC2, 0x4D)); // verde
-    g.setOpacity(1.0);
+    g.fillRect(base, QColor(0xFF, 0xFF, 0xFF));                                       // branco (bordas)
+    g.fillRect(QRectF(w / 3.0, base.top(), w / 3.0, 3), QColor(0x00, 0x9B, 0xDB));    // azul Soften (centro)
 }
 
 // A janela nao pode ser arrastada pela barra de titulo (anti-esconder): sem
@@ -639,7 +598,6 @@ RecentsPanel::RecentsPanel(QWidget* parent) : QWidget(parent) {
     titleBox->addWidget(mkLabel(QStringLiteral("HISTÓRICO · CONTATOS"), fontTelemetry(8), sig().accentSub));
     head->addLayout(titleBox);
     head->addStretch();
-    head->addWidget(mkMarker(QStringLiteral("— 03"), this), 0, Qt::AlignTop);
     v->addLayout(head);
     v->addSpacing(16);
 
@@ -776,7 +734,7 @@ SettingsPanel::SettingsPanel(SipConfig* config, QWidget* parent)
     titleBox->addWidget(mkLabel(QStringLiteral("CONTA · SIP/RTP"), fontTelemetry(8), sig().accentSub));
     head->addLayout(titleBox);
     head->addStretch();
-    head->addWidget(mkMarker(QStringLiteral("— 04"), this), 0, Qt::AlignTop);
+    head->addWidget(mkMarker(QString::fromUtf8("v") + QStringLiteral(SPHONE_VERSION), this), 0, Qt::AlignTop);
     v->addLayout(head);
     v->addSpacing(18);
 
@@ -847,10 +805,6 @@ SettingsPanel::SettingsPanel(SipConfig* config, QWidget* parent)
             .arg(textPrimary().name(), sig().cyan.name()));
         connect(upd, &QPushButton::clicked, this, &SettingsPanel::checkUpdate);
         v->addWidget(upd);
-        v->addSpacing(6);
-        auto* ver = mkLabel(QString::fromUtf8("Versão atual: v") + QStringLiteral(SPHONE_VERSION),
-                            fontTelemetry(8), textTertiary(), Qt::AlignHCenter | Qt::AlignVCenter, this);
-        v->addWidget(ver);
     }
 
     v->addStretch();

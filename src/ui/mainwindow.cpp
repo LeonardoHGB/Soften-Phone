@@ -71,7 +71,7 @@ MainWindow::MainWindow(QWidget* parent) : QWidget(parent) {
 
     buildShell();
     buildTray();
-    centerOnScreen();
+    anchorBottomRight();
 
     sphone::diag::log("MainWindow (shell desktop) criada.");
 
@@ -340,19 +340,15 @@ void MainWindow::updateLayout() {
     }
 
     // Largura da janela: so o discador => estreita (colado a lateral, sem vazio);
-    // com painel extra ou chamada => larga. Ao mudar de largura, recentraliza na
-    // horizontal (mantendo Y) p/ que discador+painel fiquem centralizados.
+    // com painel extra ou chamada => larga. Ao mudar de largura, reancora no canto
+    // inferior direito (cresce/encolhe para a esquerda, sempre preso ao canto).
     if (!isMaximized()) {
         const int aloneW = dim::RailW + dim::DialerW;
         const int targetW = alone ? aloneW : std::max(width(), dim::ShellW);
         setMinimumWidth(alone ? aloneW : dim::ShellMinW);
         if (width() != targetW) {
             resize(targetW, height());
-            QScreen* scr = screen() ? screen() : QApplication::primaryScreen();
-            if (scr) {
-                const QRect a = scr->availableGeometry();
-                move(a.x() + (a.width() - targetW) / 2, y());
-            }
+            anchorBottomRight();
         }
     }
 }
@@ -587,10 +583,12 @@ void MainWindow::openSettings() {
     updatePill();
 }
 
-void MainWindow::centerOnScreen() {
+void MainWindow::anchorBottomRight() {
     QScreen* scr = screen() ? screen() : QApplication::primaryScreen();
-    const QRect a = scr->availableGeometry();
-    move(a.center() - QPoint(width() / 2, height() / 2));
+    if (!scr) return;
+    const QRect a = scr->availableGeometry();   // exclui a barra de tarefas
+    move(a.x() + a.width()  - width()  - dim::EdgeGap,
+         a.y() + a.height() - height() - dim::EdgeGap);
 }
 
 // =====================================================================
