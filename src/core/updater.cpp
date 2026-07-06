@@ -1,5 +1,6 @@
 #include "core/updater.h"
 #include "core/version.h"
+#include "core/selfprotect.h"
 
 #include <QNetworkAccessManager>
 #include <QNetworkRequest>
@@ -74,41 +75,75 @@ void Updater::checkForUpdate() {
 }
 
 void Updater::downloadAndRun(const UpdateInfo& info) {
+    // Nome FIXO (nao interpola info.version, que vem do JSON) em %TEMP%.
+    const QString path = QDir(QStandardPaths::writableLocation(QStandardPaths::TempLocation))
+                             .filePath(QStringLiteral("SPHONE-Setup.exe"));
+
+    // Grava em STREAMING para o disco (sem bufferizar ~44 MB na RAM) e alimenta o
+    // hash em blocos, para nao travar a thread da UI no fim do download.
+    auto* file = new QFile(path);
+    if (!file->open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+        delete file;
+        emit downloadFailed(QStringLiteral("Falha ao gravar o instalador.")); return;
+    }
+    auto* hash = new QCryptographicHash(QCryptographicHash::Sha256);
+
     QNetworkRequest req{ QUrl(info.url) };
     req.setRawHeader("User-Agent", "SPHONE-Updater");
     QNetworkReply* reply = m_net->get(req);
+
     connect(reply, &QNetworkReply::downloadProgress, this, [this](qint64 r, qint64 t) {
         if (t > 0) emit downloadProgress(int(r * 100 / t));
     });
-    connect(reply, &QNetworkReply::finished, this, [this, reply, info] {
+    connect(reply, &QNetworkReply::readyRead, this, [reply, file, hash] {
+        const QByteArray chunk = reply->readAll();
+        if (!chunk.isEmpty()) { hash->addData(chunk); file->write(chunk); }
+    });
+    connect(reply, &QNetworkReply::finished, this, [this, reply, file, hash, info, path] {
         reply->deleteLater();
-        if (reply->error() != QNetworkReply::NoError) { emit downloadFailed(reply->errorString()); return; }
+        auto cleanup = [file, hash] { file->close(); delete file; delete hash; };
 
-        const QByteArray data = reply->readAll();
-        const QString actual = QString::fromLatin1(
-            QCryptographicHash::hash(data, QCryptographicHash::Sha256).toHex());
-        if (actual.compare(info.sha256.trimmed(), Qt::CaseInsensitive) != 0) {
+        if (reply->error() != QNetworkReply::NoError) {
+            const QString err = reply->errorString();
+            file->close(); file->remove(); delete file; delete hash;
+            emit downloadFailed(err); return;
+        }
+        // Ultimo bloco que possa ter chegado junto com o 'finished'.
+        const QByteArray tail = reply->readAll();
+        if (!tail.isEmpty()) { hash->addData(tail); file->write(tail); }
+        file->flush();
+
+        const QString actual = QString::fromLatin1(hash->result().toHex());
+        const bool ok = actual.compare(info.sha256.trimmed(), Qt::CaseInsensitive) == 0;
+        if (!ok) {
+            file->close(); file->remove(); delete file; delete hash;
             emit downloadFailed(QStringLiteral("A verificacao de integridade (SHA256) falhou.")); return;
         }
-
-        // Nome FIXO (nao interpola info.version, que vem do JSON) em %TEMP%.
-        const QString path = QDir(QStandardPaths::writableLocation(QStandardPaths::TempLocation))
-                                 .filePath(QStringLiteral("SPHONE-Setup.exe"));
-        QFile f(path);
-        if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate) || f.write(data) != data.size()) {
-            emit downloadFailed(QStringLiteral("Falha ao gravar o instalador.")); return;
-        }
-        f.close();
-
-        // Roda o instalador em silencio; ele fecha o app, troca os arquivos e reabre.
-        // So encerramos o app se o instalador REALMENTE iniciou (senao o usuario
-        // ficaria sem app e sem update).
-        qint64 pid = 0;
-        const bool ok = QProcess::startDetached(
-            path, { "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART" }, QString(), &pid);
-        if (!ok) { emit downloadFailed(QStringLiteral("Nao foi possivel iniciar o instalador.")); return; }
-        QTimer::singleShot(300, qApp, &QCoreApplication::quit);   // libera o exe p/ o setup trocar
+        cleanup();
+        launchInstallerAndQuit(path);
     });
+}
+
+void Updater::launchInstallerAndQuit(const QString& installerPath) {
+    // Libera a auto-protecao ANTES de lancar o setup: se o encerramento limpo
+    // demorar (teardown do PJSIP/audio), o instalador precisa poder fechar/forcar
+    // o app para substituir o SPHONE.exe — senao o /VERYSILENT trava esperando.
+    sphone::restoreProcessTermination();
+
+    // Passa o PID para o instalador esperar este processo sair antes de trocar os
+    // arquivos (setup.iss le {param:WaitPid}). Fim da corrida do delay fixo.
+    const qint64 selfPid = QCoreApplication::applicationPid();
+    qint64 pid = 0;
+    const bool started = QProcess::startDetached(
+        installerPath,
+        { QStringLiteral("/VERYSILENT"), QStringLiteral("/SUPPRESSMSGBOXES"),
+          QStringLiteral("/NORESTART"), QStringLiteral("/WaitPid=%1").arg(selfPid) },
+        QString(), &pid);
+    if (!started) {
+        emit downloadFailed(QStringLiteral("Nao foi possivel iniciar o instalador.")); return;
+    }
+    // Encerra limpo; o setup aguarda este PID sumir antes de instalar/relancar.
+    QTimer::singleShot(0, qApp, &QCoreApplication::quit);
 }
 
 }  // namespace sphone

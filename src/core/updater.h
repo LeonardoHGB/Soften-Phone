@@ -38,6 +38,7 @@ signals:
 private:
     static bool isTrustedUrl(const QString& url);
     static int  compareVersions(const QString& a, const QString& b);   // a>b: >0
+    void launchInstallerAndQuit(const QString& installerPath);         // libera protecao, roda /VERYSILENT e encerra
     QNetworkAccessManager* m_net = nullptr;
 };
 

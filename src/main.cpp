@@ -31,7 +31,15 @@ int main(int argc, char** argv) {
     // Evita registro SIP duplicado do mesmo ramal. Se ja existe, sinaliza a
     // instancia viva para reerguer a janela e sai.
     QSharedMemory guard(kInstanceKey);
-    if (!guard.create(1)) {
+    bool created = guard.create(1);
+    if (!created) {
+        // Pode ser resquicio do processo que acabou de sair no auto-update: anexa
+        // e solta para liberar o segmento e tenta recriar uma vez. Se ainda houver
+        // uma instancia VIVA, a recriacao continua falhando (comportamento correto).
+        if (guard.attach()) guard.detach();
+        created = guard.create(1);
+    }
+    if (!created) {
         QLocalSocket sock;
         sock.connectToServer(kShowServer);
         sock.waitForConnected(300);

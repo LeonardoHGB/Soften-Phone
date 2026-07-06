@@ -60,10 +60,21 @@ void hardenProcessAgainstTermination() {
     LocalFree(tu);
 }
 
+void restoreProcessTermination() {
+    // DACL NULL => concede acesso total a todos. O processo esta prestes a
+    // encerrar para o update; liberar PROCESS_TERMINATE deixa o instalador
+    // fechar/forcar o app caso o encerramento limpo demore.
+    SetSecurityInfo(GetCurrentProcess(), SE_KERNEL_OBJECT, DACL_SECURITY_INFORMATION,
+                    nullptr, nullptr, nullptr, nullptr);
+}
+
 }  // namespace sphone
 
 #else
 
-namespace sphone { void hardenProcessAgainstTermination() {} }
+namespace sphone {
+void hardenProcessAgainstTermination() {}
+void restoreProcessTermination() {}
+}
 
 #endif

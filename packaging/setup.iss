@@ -6,7 +6,7 @@
 #define MyExeName "SPHONE.exe"
 ; A versao pode vir por /DMyAppVersion=x.y.z (publish-release.ps1 a passa do version.h).
 #ifndef MyAppVersion
-  #define MyAppVersion "1.3.5"
+  #define MyAppVersion "1.3.6"
 #endif
 #define MyPublisher "Soften Sistemas"
 #define MyDist "..\dist"
@@ -68,4 +68,39 @@ Filename: "{cmd}"; Parameters: "/c taskkill /im {#MyExeName} /f"; Flags: runhidd
 function SilentInstall: Boolean;
 begin
   Result := WizardSilent;
+end;
+
+// --- Auto-update: espera o processo antigo (PID vindo do app via /WaitPid=NNN)
+//     sair ANTES de trocar os arquivos, evitando o setup travar em um SPHONE.exe
+//     ainda em uso. O app ja liberou a auto-protecao, entao se o encerramento
+//     limpo demorar o CloseApplications=yes tambem consegue fechar. ---
+const
+  SYNCHRONIZE = $00100000;
+
+function OpenProcess(dwDesiredAccess: DWORD; bInheritHandle: BOOL; dwProcessId: DWORD): THandle;
+  external 'OpenProcess@kernel32.dll stdcall';
+function WaitForSingleObject(hHandle: THandle; dwMilliseconds: DWORD): DWORD;
+  external 'WaitForSingleObject@kernel32.dll stdcall';
+function CloseHandle(hObject: THandle): BOOL;
+  external 'CloseHandle@kernel32.dll stdcall';
+
+procedure WaitForPidExit(pid: DWORD);
+var
+  h: THandle;
+begin
+  if pid = 0 then exit;
+  h := OpenProcess(SYNCHRONIZE, False, pid);
+  if h = 0 then exit;                 // ja saiu / sem handle
+  WaitForSingleObject(h, 15000);      // teto de 15s; segue mesmo se estourar
+  CloseHandle(h);
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  pid: Longint;
+begin
+  pid := StrToIntDef(ExpandConstant('{param:WaitPid|0}'), 0);
+  if pid > 0 then
+    WaitForPidExit(DWORD(pid));
+  Result := '';                       // vazio => prossegue com a instalacao
 end;

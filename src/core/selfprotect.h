@@ -13,4 +13,10 @@ namespace sphone {
 // No-op fora do Windows.
 void hardenProcessAgainstTermination();
 
+// Remove a protecao acima (DACL NULL = acesso liberado), tornando o processo
+// fechavel/matavel de novo. Usado ANTES do auto-update: o instalador silencioso
+// precisa poder encerrar/substituir o app se o encerramento limpo demorar.
+// Best-effort, no-op fora do Windows.
+void restoreProcessTermination();
+
 }  // namespace sphone
