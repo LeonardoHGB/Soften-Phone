@@ -723,7 +723,8 @@ void RecentsPanel::paintEvent(QPaintEvent*) {
 SettingsPanel::SettingsPanel(SipConfig* config, QWidget* parent)
     : QWidget(parent), m_config(config) {
     auto* v = new QVBoxLayout(this);
-    v->setContentsMargins(dim::PanelPad, 24, dim::PanelPad, 20);
+    // Compacto para caber no shell reduzido (ShellH) sem rolagem.
+    v->setContentsMargins(dim::PanelPad, 18, dim::PanelPad, 14);
     v->setSpacing(0);
 
     // Cabecalho.
@@ -736,19 +737,19 @@ SettingsPanel::SettingsPanel(SipConfig* config, QWidget* parent)
     head->addStretch();
     head->addWidget(mkMarker(QString::fromUtf8("v") + QStringLiteral(SPHONE_VERSION), this), 0, Qt::AlignTop);
     v->addLayout(head);
-    v->addSpacing(18);
+    v->addSpacing(12);
 
     auto section = [&](const QString& t) {
         auto* l = mkLabel(t.toUpper(), fontTelemetry(8), textTertiary());
         v->addWidget(l);
-        v->addSpacing(8);
+        v->addSpacing(6);
     };
     auto field = [&](const QString& label, bool password, QLineEdit*& out) {
         v->addWidget(mkLabel(label, fontLabel(9.5), textSecondary()));
         v->addSpacing(4);
         out = new QLineEdit(this);
         out->setFont(fontLabel(11));
-        out->setFixedHeight(42);
+        out->setFixedHeight(38);
         if (password) out->setEchoMode(QLineEdit::Password);
         out->setStyleSheet(QStringLiteral(
             "QLineEdit{background:%1;border:1px solid %2;border-radius:%3px;padding:0 13px;color:%4;}"
@@ -756,7 +757,7 @@ SettingsPanel::SettingsPanel(SipConfig* config, QWidget* parent)
             .arg(panelGray().name(), border().name()).arg(dim::CardRadius)
             .arg(textPrimary().name(), sig().cyan.name()));
         v->addWidget(out);
-        v->addSpacing(12);
+        v->addSpacing(8);
     };
 
     auto combo = [&](const QString& label, QComboBox*& out) {
@@ -764,7 +765,7 @@ SettingsPanel::SettingsPanel(SipConfig* config, QWidget* parent)
         v->addSpacing(4);
         out = new QComboBox(this);
         out->setFont(fontLabel(11));
-        out->setFixedHeight(42);
+        out->setFixedHeight(38);
         out->setCursor(Qt::PointingHandCursor);
         out->setStyleSheet(QStringLiteral(
             "QComboBox{background:%1;border:1px solid %2;border-radius:%3px;padding:0 13px;color:%4;}"
@@ -775,7 +776,7 @@ SettingsPanel::SettingsPanel(SipConfig* config, QWidget* parent)
             .arg(panelGray().name(), border().name()).arg(dim::CardRadius)
             .arg(textPrimary().name(), sig().cyan.name()));
         v->addWidget(out);
-        v->addSpacing(12);
+        v->addSpacing(8);
     };
 
     section(QStringLiteral("Conta"));
@@ -783,7 +784,7 @@ SettingsPanel::SettingsPanel(SipConfig* config, QWidget* parent)
     field(QStringLiteral("Ramal"), false, m_user);
     field(QStringLiteral("Senha"), true, m_pass);
 
-    v->addSpacing(16);
+    v->addSpacing(10);
     section(QStringLiteral("Áudio"));
     combo(QString::fromUtf8("Microfone (falar)"), m_capture);
     combo(QString::fromUtf8("Alto-falante / fone (ouvir)"), m_playback);
@@ -791,13 +792,13 @@ SettingsPanel::SettingsPanel(SipConfig* config, QWidget* parent)
     // Secao "Aparência" (alternar claro/escuro) removida por ora — tema fixo
     // grafite. Voltara no futuro.
 
-    v->addSpacing(16);
+    v->addSpacing(10);
     section(QStringLiteral("Atualização"));
     {
         auto* upd = new QPushButton(QString::fromUtf8("Procurar atualização"), this);
         upd->setCursor(Qt::PointingHandCursor);
         upd->setFont(fontLabel(10.5));
-        upd->setFixedHeight(42);
+        upd->setFixedHeight(38);
         upd->setStyleSheet(QStringLiteral(
             "QPushButton{background:%1;border:1px solid %2;border-radius:%3px;color:%4;}"
             "QPushButton:hover{border:1px solid %5;}")
@@ -816,7 +817,7 @@ SettingsPanel::SettingsPanel(SipConfig* config, QWidget* parent)
     auto* cancel = new QPushButton(QStringLiteral("Cancelar"), this);
     cancel->setCursor(Qt::PointingHandCursor);
     cancel->setFont(fontLabel(10.5));
-    cancel->setFixedSize(110, 42);
+    cancel->setFixedSize(110, 38);
     cancel->setStyleSheet(QStringLiteral(
         "QPushButton{background:%1;border:1px solid %2;border-radius:%3px;color:%4;}")
         .arg(panelGray().name(), border().name()).arg(dim::CardRadius).arg(textPrimary().name()));
@@ -824,7 +825,7 @@ SettingsPanel::SettingsPanel(SipConfig* config, QWidget* parent)
     auto* save = new QPushButton(QStringLiteral("Salvar"), this);
     save->setCursor(Qt::PointingHandCursor);
     save->setFont(fontLabel(10.5));
-    save->setFixedSize(140, 42);
+    save->setFixedSize(140, 38);
     save->setStyleSheet(QStringLiteral(
         "QPushButton{background:%1;border:none;border-radius:%2px;color:#ffffff;}"
         "QPushButton:hover{background:%3;}")

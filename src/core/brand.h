@@ -228,10 +228,11 @@ inline QColor blend(const QColor& a, const QColor& b, double t) {
 // ---------------------------------------------------------------------------
 namespace dim {
 // --- Shell desktop "Signal Architecture" (3 paineis + rail + titlebar) ---
-inline constexpr int ShellW = 1080, ShellH = 700;   // tamanho default da janela
-inline constexpr int ShellMinW = 900, ShellMinH = 600;
+inline constexpr int ShellW = 900, ShellH = 620;    // tamanho da janela com painel extra encaixado
+inline constexpr int ShellMinW = 760, ShellMinH = 560;
+inline constexpr int RingW = 1080, RingH = 700;     // chamada RECEBIDA (takeover): mantem o tamanho cheio
 inline constexpr int RailW = 84;                    // largura do nav rail
-inline constexpr int DialerW = 350;                 // largura da coluna do discador
+inline constexpr int DialerW = 300;                 // largura da coluna do discador
 inline constexpr int TitleBarH = 56;                // altura da barra de titulo
 inline constexpr int WindowRadius = 16;             // cantos da janela frameless
 inline constexpr int CardRadius = 14;               // display, busca, cards

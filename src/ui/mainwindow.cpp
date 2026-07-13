@@ -343,11 +343,14 @@ void MainWindow::updateLayout() {
     // com painel extra ou chamada => larga. Ao mudar de largura, reancora no canto
     // inferior direito (cresce/encolhe para a esquerda, sempre preso ao canto).
     if (!isMaximized()) {
-        const int aloneW = dim::RailW + dim::DialerW;
-        const int targetW = alone ? aloneW : std::max(width(), dim::ShellW);
+        const int aloneW  = dim::RailW + dim::DialerW;
+        // Chamada recebida (takeover) mantem o tamanho cheio; os demais estados
+        // usam o shell compacto. Janela sem grip: tamanho e 100% controlado aqui.
+        const int targetW = incoming ? dim::RingW : alone ? aloneW : dim::ShellW;
+        const int targetH = incoming ? dim::RingH : dim::ShellH;
         setMinimumWidth(alone ? aloneW : dim::ShellMinW);
-        if (width() != targetW) {
-            resize(targetW, height());
+        if (width() != targetW || height() != targetH) {
+            resize(targetW, targetH);
             anchorBottomRight();
         }
     }
