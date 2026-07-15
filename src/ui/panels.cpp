@@ -637,39 +637,9 @@ RecentsPanel::RecentsPanel(QWidget* parent) : QWidget(parent) {
         "QScrollBar::add-line,QScrollBar::sub-line{height:0;}").arg(border().name()));
     connect(delegate, &CallLogDelegate::redial, this, &RecentsPanel::redial);
     v->addWidget(view, 1);
-
-    // Rodape de telemetria (alimentado pela MainWindow durante a chamada).
-    v->addSpacing(6);
-    auto* foot = new QHBoxLayout();
-    foot->setSpacing(0);
-    auto mkStat = [this](const QString& cap, const QString& val, QLabel** out) {
-        auto* cell = new QVBoxLayout();
-        cell->setSpacing(1);
-        cell->addWidget(mkLabel(cap, fontTelemetry(7), textTertiary()));
-        auto* vl = mkLabel(val, fontDisplay(9.5), textSecondary());
-        if (out) *out = vl;
-        cell->addWidget(vl);
-        return cell;
-    };
-    foot->addLayout(mkStat(QStringLiteral("CODEC"), QStringLiteral("—"), &m_codecVal));
-    foot->addStretch();
-    foot->addLayout(mkStat(QStringLiteral("LATÊNCIA"), QStringLiteral("—"), &m_latVal));
-    foot->addStretch();
-    foot->addLayout(mkStat(QStringLiteral("SINAL"), QStringLiteral("▯▯▯▯"), &m_sigVal));
-    v->addLayout(foot);
 }
 
 void RecentsPanel::setEntries(const QList<CallAudit>& items) { m_model->setItems(items); }
-
-void RecentsPanel::setTelemetry(const QString& codec, const QString& latency, const QString& signal) {
-    if (m_codecVal) m_codecVal->setText(codec);
-    if (m_latVal)   m_latVal->setText(latency);
-    if (m_sigVal)   m_sigVal->setText(signal);
-}
-
-void RecentsPanel::clearTelemetry() {
-    setTelemetry(QStringLiteral("—"), QStringLiteral("—"), QStringLiteral("▯▯▯▯"));
-}
 
 void RecentsPanel::paintEvent(QPaintEvent*) { paintPageBg(this); }
 

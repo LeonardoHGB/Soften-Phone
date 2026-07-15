@@ -162,15 +162,13 @@ private:
 };
 
 // ---------------------------------------------------------------------------
-// RecentsPanel — busca, abas de filtro, lista de chamadas, rodape telemetria.
+// RecentsPanel — busca, abas de filtro e lista de chamadas.
 // ---------------------------------------------------------------------------
 class RecentsPanel : public QWidget {
     Q_OBJECT
 public:
     explicit RecentsPanel(QWidget* parent = nullptr);
     void setEntries(const QList<CallAudit>& items);
-    void setTelemetry(const QString& codec, const QString& latency, const QString& signal);
-    void clearTelemetry();    // volta o rodape aos marcadores neutros
 signals:
     void redial(const QString& number);
 protected:
@@ -180,9 +178,6 @@ private:
     QButtonGroup* m_tabs = nullptr;
     CallLogModel* m_model = nullptr;
     CallLogProxy* m_proxy = nullptr;
-    QLabel*       m_codecVal = nullptr;
-    QLabel*       m_latVal = nullptr;
-    QLabel*       m_sigVal = nullptr;
 };
 
 // ---------------------------------------------------------------------------

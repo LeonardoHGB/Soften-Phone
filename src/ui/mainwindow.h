@@ -68,7 +68,6 @@ private:
 
     // timer da chamada
     void startCallTimer(); void stopCallTimer();
-    void startStats();     void stopStats();      // telemetria do rodape de Registros
 
     // chamada recebida / janela
     void startRing(); void stopRing();
@@ -100,7 +99,6 @@ private:
     // estado de chamada
     QString   m_peerName, m_peerNumber;
     QTimer*   m_callTimer = nullptr; QDateTime m_callStart;
-    QTimer*   m_statsTimer = nullptr;
     QTimer*   m_autoAnswerTimer = nullptr;
 
     QSystemTrayIcon* m_tray = nullptr;

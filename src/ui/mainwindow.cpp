@@ -92,7 +92,6 @@ MainWindow::~MainWindow() {
     stopRing();
     stopAutoAnswer();
     stopCallTimer();
-    stopStats();
     if (m_sip) delete m_sip;
 }
 
@@ -236,7 +235,7 @@ void MainWindow::applyState(LS st) {
     if (wasCall && !nowCall) m_tones->playEnd();
 
     if (st != LS::Ringing) { stopRing(); stopAutoAnswer(); }
-    if (st != LS::InCall) { stopCallTimer(); stopStats(); }
+    if (st != LS::InCall) stopCallTimer();
     if (st != LS::Calling) m_tones->stopRingback();
     if (st != LS::Ringing && m_ringing) { m_ringing = false; setTopMost(false); }
 
@@ -274,7 +273,6 @@ void MainWindow::applyState(LS st) {
             m_call->setPeer(m_peerName, m_peerNumber);
             m_call->setView(CallPanel::View::Active);
             startCallTimer();
-            startStats();
             break;
     }
     updateLayout();
@@ -370,34 +368,6 @@ void MainWindow::startCallTimer() {
 }
 void MainWindow::stopCallTimer() {
     if (m_callTimer) { m_callTimer->stop(); m_callTimer->deleteLater(); m_callTimer = nullptr; }
-}
-
-// Telemetria do rodape de Registros: codec / latencia / barras de sinal (~1 Hz).
-void MainWindow::startStats() {
-    stopStats();
-    m_statsTimer = new QTimer(this);
-    m_statsTimer->setInterval(1000);
-    auto tick = [this] {
-        if (!m_sip) return;
-        const MediaStats s = m_sip->mediaStats();
-        if (!s.valid) { m_recents->setTelemetry(QStringLiteral("—"), QStringLiteral("—"), QStringLiteral("▯▯▯▯")); return; }
-        const QString codec = s.clockRate > 0
-            ? QStringLiteral("%1 %2k").arg(s.codec.toUpper()).arg(s.clockRate / 1000)
-            : s.codec.toUpper();
-        const QString lat = s.rttMs >= 0 ? QStringLiteral("%1 ms").arg(s.rttMs) : QStringLiteral("—");
-        int bars = s.lossPermil < 0 ? 3
-                 : s.lossPermil <= 10 ? 4 : s.lossPermil <= 30 ? 3 : s.lossPermil <= 80 ? 2 : 1;
-        QString sig;
-        for (int i = 0; i < 4; ++i) sig += (i < bars ? QChar(0x25AE) : QChar(0x25AF));  // ▮ / ▯
-        m_recents->setTelemetry(codec, lat, sig);
-    };
-    connect(m_statsTimer, &QTimer::timeout, this, tick);
-    m_statsTimer->start();
-    tick();
-}
-void MainWindow::stopStats() {
-    if (m_statsTimer) { m_statsTimer->stop(); m_statsTimer->deleteLater(); m_statsTimer = nullptr; }
-    if (m_recents) m_recents->clearTelemetry();
 }
 
 // =====================================================================
