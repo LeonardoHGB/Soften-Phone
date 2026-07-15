@@ -769,7 +769,7 @@ SettingsPanel::SettingsPanel(SipConfig* config, QWidget* parent)
         // O nome do device fica em itemData; "" (Padrao do sistema) zera a escolha.
         m_config->captureDevice  = m_capture  ? m_capture->currentData().toString()  : QString();
         m_config->playbackDevice = m_playback ? m_playback->currentData().toString() : QString();
-        m_config->autoAnswer     = m_autoAnswer ? m_autoAnswer->isChecked() : true;
+        m_config->autoAnswer     = m_autoAnswer ? m_autoAnswer->isChecked() : false;
         emit saved();
     });
     foot->addWidget(cancel);

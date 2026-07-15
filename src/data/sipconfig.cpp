@@ -74,7 +74,7 @@ SipConfig SipConfig::load() {
     c.darkTheme        = o.value("DarkTheme").toBool(true);
     c.captureDevice    = o.value("CaptureDevice").toString();
     c.playbackDevice   = o.value("PlaybackDevice").toString();
-    c.autoAnswer       = o.value("AutoAnswer").toBool(true);
+    c.autoAnswer       = o.value("AutoAnswer").toBool(false);
 
     const QString prot = o.value("PasswordProtected").toString();
     if (!prot.isEmpty()) c.password = unprotect(prot);

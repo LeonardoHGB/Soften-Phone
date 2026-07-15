@@ -26,8 +26,8 @@ struct SipConfig {
     QString playbackDevice;    // alto-falante/fone (reproducao)
 
     // Auto-atendimento: atende sozinho 1s apos comecar a tocar (com chime de
-    // aviso ao atendente). Ligado por padrao; opcional via Config.
-    bool    autoAnswer = true;
+    // aviso ao atendente). DESLIGADO por padrao; a pessoa ativa em Config.
+    bool    autoAnswer = false;
 
     bool isComplete() const {
         return !server.isEmpty() && !username.isEmpty() && !password.isEmpty();
