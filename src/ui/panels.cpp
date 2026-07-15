@@ -1,6 +1,7 @@
 #include "ui/panels.h"
 #include "ui/signalwidgets.h"
 #include "ui/recentsmodel.h"
+#include "ui/controls.h"
 #include "core/brand.h"
 #include "core/version.h"
 #include "data/sipconfig.h"
@@ -679,7 +680,7 @@ SettingsPanel::SettingsPanel(SipConfig* config, QWidget* parent)
     : QWidget(parent), m_config(config) {
     auto* v = new QVBoxLayout(this);
     // Compacto para caber na pagina do shell fixo sem rolagem.
-    v->setContentsMargins(dim::PanelPad, 10, dim::PanelPad, 10);
+    v->setContentsMargins(dim::PanelPad, 8, dim::PanelPad, 8);
     v->setSpacing(0);
 
     auto section = [&](const QString& t) {
@@ -692,7 +693,7 @@ SettingsPanel::SettingsPanel(SipConfig* config, QWidget* parent)
         v->addSpacing(2);
         out = new QLineEdit(this);
         out->setFont(fontLabel(10));
-        out->setFixedHeight(30);
+        out->setFixedHeight(28);
         if (password) out->setEchoMode(QLineEdit::Password);
         out->setStyleSheet(QStringLiteral(
             "QLineEdit{background:%1;border:1px solid %2;border-radius:%3px;padding:0 10px;color:%4;}"
@@ -700,7 +701,7 @@ SettingsPanel::SettingsPanel(SipConfig* config, QWidget* parent)
             .arg(panelGray().name(), border().name()).arg(dim::CardRadius)
             .arg(textPrimary().name(), sig().cyan.name()));
         v->addWidget(out);
-        v->addSpacing(5);
+        v->addSpacing(4);
     };
 
     auto combo = [&](const QString& label, QComboBox*& out) {
@@ -708,7 +709,7 @@ SettingsPanel::SettingsPanel(SipConfig* config, QWidget* parent)
         v->addSpacing(2);
         out = new QComboBox(this);
         out->setFont(fontLabel(10));
-        out->setFixedHeight(30);
+        out->setFixedHeight(28);
         out->setCursor(Qt::PointingHandCursor);
         out->setStyleSheet(QStringLiteral(
             "QComboBox{background:%1;border:1px solid %2;border-radius:%3px;padding:0 10px;color:%4;}"
@@ -719,7 +720,7 @@ SettingsPanel::SettingsPanel(SipConfig* config, QWidget* parent)
             .arg(panelGray().name(), border().name()).arg(dim::CardRadius)
             .arg(textPrimary().name(), sig().cyan.name()));
         v->addWidget(out);
-        v->addSpacing(5);
+        v->addSpacing(4);
     };
 
     section(QStringLiteral("Conta"));
@@ -732,12 +733,26 @@ SettingsPanel::SettingsPanel(SipConfig* config, QWidget* parent)
     combo(QString::fromUtf8("Microfone (falar)"), m_capture);
     combo(QString::fromUtf8("Alto-falante / fone (ouvir)"), m_playback);
 
+    // Auto-atendimento: label + toggle na mesma linha (economiza altura).
+    v->addSpacing(4);
+    {
+        auto* row = new QHBoxLayout();
+        row->setContentsMargins(0, 0, 0, 0);
+        row->setSpacing(8);
+        row->addWidget(mkLabel(QString::fromUtf8("Atendimento automático (1s)"),
+                               fontLabel(9), textSecondary()));
+        row->addStretch();
+        m_autoAnswer = new ToggleSwitch(this);
+        row->addWidget(m_autoAnswer);
+        v->addLayout(row);
+    }
+
     v->addSpacing(4);
     {
         auto* upd = new QPushButton(QString::fromUtf8("Procurar atualização"), this);
         upd->setCursor(Qt::PointingHandCursor);
         upd->setFont(fontLabel(9.5));
-        upd->setFixedHeight(30);
+        upd->setFixedHeight(28);
         upd->setStyleSheet(QStringLiteral(
             "QPushButton{background:%1;border:1px solid %2;border-radius:%3px;color:%4;}"
             "QPushButton:hover{border:1px solid %5;}")
@@ -784,6 +799,7 @@ SettingsPanel::SettingsPanel(SipConfig* config, QWidget* parent)
         // O nome do device fica em itemData; "" (Padrao do sistema) zera a escolha.
         m_config->captureDevice  = m_capture  ? m_capture->currentData().toString()  : QString();
         m_config->playbackDevice = m_playback ? m_playback->currentData().toString() : QString();
+        m_config->autoAnswer     = m_autoAnswer ? m_autoAnswer->isChecked() : true;
         emit saved();
     });
     foot->addWidget(cancel);
@@ -799,6 +815,7 @@ void SettingsPanel::loadConfig() {
     m_server->setText(m_config->server);
     m_user->setText(m_config->username);
     m_pass->setText(m_config->password);
+    if (m_autoAnswer) m_autoAnswer->setChecked(m_config->autoAnswer);
 }
 
 void SettingsPanel::setAudioDevices(const QList<AudioDevice>& devices) {

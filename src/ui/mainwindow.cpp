@@ -90,6 +90,7 @@ MainWindow::MainWindow(QWidget* parent) : QWidget(parent) {
 
 MainWindow::~MainWindow() {
     stopRing();
+    stopAutoAnswer();
     stopCallTimer();
     stopStats();
     if (m_sip) delete m_sip;
@@ -234,7 +235,7 @@ void MainWindow::applyState(LS st) {
     const bool nowCall = (st == LS::Calling || st == LS::InCall || st == LS::Ringing);
     if (wasCall && !nowCall) m_tones->playEnd();
 
-    if (st != LS::Ringing) stopRing();
+    if (st != LS::Ringing) { stopRing(); stopAutoAnswer(); }
     if (st != LS::InCall) { stopCallTimer(); stopStats(); }
     if (st != LS::Calling) m_tones->stopRingback();
     if (st != LS::Ringing && m_ringing) { m_ringing = false; setTopMost(false); }
@@ -259,6 +260,7 @@ void MainWindow::applyState(LS st) {
             bringToForeground();
             setTopMost(true);
             startRing();
+            if (m_config.autoAnswer) startAutoAnswer();
             break;
         case LS::Calling:
             m_call->setPeer(m_peerName, m_peerNumber);
@@ -416,6 +418,25 @@ void MainWindow::stopRing() {
     if (m_ringtone) m_ringtone->stop();
     flashWindow(false);
 }
+// Auto-atendimento: 1s depois de comecar a tocar, atende sozinho e toca o chime
+// de aviso — o atendente sabe que ja esta no ar sem ter clicado em nada. O timer
+// e cancelado se a chamada sair do estado Ringing antes (atendida/perdida).
+void MainWindow::startAutoAnswer() {
+    stopAutoAnswer();
+    m_autoAnswerTimer = new QTimer(this);
+    m_autoAnswerTimer->setSingleShot(true);
+    m_autoAnswerTimer->setInterval(1000);
+    connect(m_autoAnswerTimer, &QTimer::timeout, this, [this] {
+        if (!m_sip || m_sip->state() != LS::Ringing) return;
+        m_tones->playAutoAnswer();
+        m_sip->answer();
+    });
+    m_autoAnswerTimer->start();
+}
+void MainWindow::stopAutoAnswer() {
+    if (m_autoAnswerTimer) { m_autoAnswerTimer->stop(); m_autoAnswerTimer->deleteLater(); m_autoAnswerTimer = nullptr; }
+}
+
 void MainWindow::bringToForeground() {
     showNormal(); raise(); activateWindow(); flashWindow(true);
 }

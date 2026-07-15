@@ -72,6 +72,7 @@ private:
 
     // chamada recebida / janela
     void startRing(); void stopRing();
+    void startAutoAnswer(); void stopAutoAnswer();   // atende sozinho apos o toque
     void bringToForeground(); void keepRingingOnTop();
     void setTopMost(bool on); void flashWindow(bool start);
 
@@ -100,6 +101,7 @@ private:
     QString   m_peerName, m_peerNumber;
     QTimer*   m_callTimer = nullptr; QDateTime m_callStart;
     QTimer*   m_statsTimer = nullptr;
+    QTimer*   m_autoAnswerTimer = nullptr;
 
     QSystemTrayIcon* m_tray = nullptr;
     Tones*        m_tones = nullptr;

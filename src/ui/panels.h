@@ -31,6 +31,7 @@ class SignalRings;
 class Waveform;
 class CallLogModel;
 class CallLogProxy;
+class ToggleSwitch;
 struct SipConfig;
 
 // ---------------------------------------------------------------------------
@@ -209,6 +210,7 @@ private:
     QLineEdit*    m_pass = nullptr;
     QComboBox*    m_capture = nullptr;    // microfone
     QComboBox*    m_playback = nullptr;   // alto-falante/fone
+    ToggleSwitch* m_autoAnswer = nullptr; // auto-atendimento (1s + chime)
 };
 
 }  // namespace sphone

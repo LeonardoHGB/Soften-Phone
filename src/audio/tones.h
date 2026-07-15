@@ -27,6 +27,7 @@ public:
     void stopRingback();
     void playStart();             // bipe curto ao INICIAR a chamada de saida
     void playEnd();               // bipe duplo ao ENCERRAR a chamada
+    void playAutoAnswer();        // chime ascendente: chamada ATENDIDA sozinha
 
 private:
     static QByteArray synth(const QList<int>& freqs, int toneMs, double amplitude, int silenceMs);
@@ -41,7 +42,7 @@ private:
     QAudioSink*              m_rbSink = nullptr;
     QBuffer*                 m_rbBuf = nullptr;     // QBuffer (puxado pelo QAudioSink); loop por restart no Idle
     bool                     m_ringbackOn = false;
-    QByteArray               m_startPcm, m_endPcm;   // efeitos one-shot
+    QByteArray               m_startPcm, m_endPcm, m_autoPcm;   // efeitos one-shot
     QAudioSink*              m_fxSink = nullptr;
     QBuffer*                 m_fxBuf = nullptr;
 };

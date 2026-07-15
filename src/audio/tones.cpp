@@ -33,6 +33,10 @@ Tones::Tones(QObject* parent) : QObject(parent) {
     // Efeitos discretos: 1 bipe agudo ao iniciar a chamada; 2 bipes graves ao encerrar.
     m_startPcm = synthBeeps(660, 110, 0, 1, 0.30);
     m_endPcm   = synthBeeps(440, 130, 90, 2, 0.30);
+    // Auto-atendimento: chime ascendente (3 notas), bem distinto dos demais —
+    // avisa o atendente que a chamada foi atendida sozinha e ele ja esta no ar.
+    m_autoPcm  = synth({ 660 }, 90, 0.32, 45) + synth({ 880 }, 90, 0.32, 45)
+               + synth({ 1100 }, 170, 0.32, 0);
 
     const QAudioDevice dev = QMediaDevices::defaultAudioOutput();
     m_dtmfSink = new QAudioSink(dev, m_fmt, this);
@@ -137,7 +141,8 @@ void Tones::playOnceFx(const QByteArray& pcm) {
     m_fxSink->start(m_fxBuf);
 }
 
-void Tones::playStart() { playOnceFx(m_startPcm); }
-void Tones::playEnd()   { playOnceFx(m_endPcm); }
+void Tones::playStart()      { playOnceFx(m_startPcm); }
+void Tones::playEnd()        { playOnceFx(m_endPcm); }
+void Tones::playAutoAnswer() { playOnceFx(m_autoPcm); }
 
 }  // namespace sphone
