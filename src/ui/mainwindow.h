@@ -1,12 +1,13 @@
 #pragma once
 //
-// mainwindow.h — Shell desktop "Signal Architecture".
+// mainwindow.h — Shell compacto estilo MicroSIP.
 //
-// Janela frameless com TitleBar + (NavRail | Discador | Chamada | Recentes)
-// visiveis juntos. A MainWindow e a CAMADA DE CONTROLE: orquestra o SipManager,
-// timers, bandeja, saida por senha de supervisor, ring/flash e troca de tema a
-// quente. Os paineis (ui/panels.h) sao apenas vista. O backend (SIP, audio,
-// historico, config) e identico ao do widget de canto anterior.
+// Janela frameless UNICA de tamanho FIXO: TitleBar + TabsBar (Telefone /
+// Registros / Config) + QStackedWidget com as paginas + StatusBar. A MainWindow
+// e a CAMADA DE CONTROLE: orquestra o SipManager, timers, bandeja, saida por
+// senha de supervisor, ring/flash e a troca de paginas. As paginas
+// (ui/panels.h) sao apenas vista. O backend (SIP, audio, historico, config) e
+// identico ao do shell anterior.
 //
 #include <QWidget>
 #include <QDateTime>
@@ -17,6 +18,7 @@
 
 class QTimer;
 class QSystemTrayIcon;
+class QStackedWidget;
 
 namespace sphone {
 
@@ -24,7 +26,8 @@ class Tones;
 class Ringtone;
 class DiscordAudit;
 class TitleBar;
-class NavRail;
+class TabsBar;
+class StatusBar;
 class DialerPanel;
 class CallPanel;
 class RecentsPanel;
@@ -50,8 +53,8 @@ protected:
 private:
     void buildShell();
     void wirePanels();
-    void rebuildShell();          // reconstroi a UI (troca de tema)
-    void updateLayout();          // visibilidade dos paineis conforme estado/recentes
+    void onTabClicked(int idx);   // clique nas abas (Telefone/Registros/Config)
+    void updateLayout();          // escolhe a pagina do stack conforme estado/aba
     void setWindowLocked(bool on);// trava janela (chamada recebida)
     void applyRoundedMask();
     void anchorBottomRight();     // cola a janela no canto inferior direito da tela
@@ -61,12 +64,11 @@ private:
     void applyState(SipManager::LineState st);
     void startOutgoingCall();
     void sendDtmfIfInCall(QChar key);
-    void updatePill();
+    void updateStatus();          // alimenta a barra de status inferior
 
     // timer da chamada
     void startCallTimer(); void stopCallTimer();
-    void startMeter();     void stopMeter();      // alimenta o waveform
-    void startStats();     void stopStats();      // telemetria do rodape
+    void startStats();     void stopStats();      // telemetria do rodape de Registros
 
     // chamada recebida / janela
     void startRing(); void stopRing();
@@ -82,22 +84,21 @@ private:
     SipManager* m_sip = nullptr;
 
     // shell
-    QWidget*      m_content = nullptr;
-    TitleBar*     m_titleBar = nullptr;
-    NavRail*      m_nav = nullptr;
-    DialerPanel*  m_dialer = nullptr;
-    CallPanel*    m_call = nullptr;
-    RecentsPanel* m_recents = nullptr;
+    TitleBar*      m_titleBar = nullptr;
+    TabsBar*       m_tabsBar = nullptr;
+    StatusBar*     m_status = nullptr;
+    QStackedWidget* m_stack = nullptr;
+    DialerPanel*   m_dialer = nullptr;
+    CallPanel*     m_call = nullptr;
+    RecentsPanel*  m_recents = nullptr;
     SettingsPanel* m_settings = nullptr;
-    QWidget*      m_sep = nullptr;          // divisoria discador|extra
-    bool          m_recentsOpen = false;    // Recentes encaixado (toggle do nav)
-    bool          m_settingsOpen = false;   // Configuracoes encaixado (toggle do nav)
-    bool          m_windowLocked = false;   // chamada recebida trava a janela
+    int            m_tab = 0;               // aba ativa (0 Telefone / 1 Registros / 2 Config)
+    bool           m_dtmfPad = false;       // em chamada: mostra o discador p/ DTMF
+    bool           m_windowLocked = false;  // chamada recebida trava a janela
 
     // estado de chamada
     QString   m_peerName, m_peerNumber;
     QTimer*   m_callTimer = nullptr; QDateTime m_callStart;
-    QTimer*   m_meterTimer = nullptr; float m_levelShown = 0;
     QTimer*   m_statsTimer = nullptr;
 
     QSystemTrayIcon* m_tray = nullptr;

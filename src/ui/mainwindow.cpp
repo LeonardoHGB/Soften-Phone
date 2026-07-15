@@ -12,8 +12,7 @@
 #include "audio/ringtone.h"
 
 #include <QVBoxLayout>
-#include <QHBoxLayout>
-#include <QFrame>
+#include <QStackedWidget>
 #include <QTimer>
 #include <QSystemTrayIcon>
 #include <QMenu>
@@ -60,8 +59,8 @@ MainWindow::MainWindow(QWidget* parent) : QWidget(parent) {
     setWindowTitle(QStringLiteral("Soften Phone"));
     setWindowIcon(QIcon(":/assets/logo.ico"));
     setWindowFlag(Qt::FramelessWindowHint, true);
-    setMinimumSize(dim::ShellMinW, dim::ShellMinH);
-    resize(dim::ShellW, dim::ShellH);
+    // Janela UNICA de tamanho FIXO (estilo MicroSIP): nenhum estado redimensiona.
+    setFixedSize(dim::ShellW, dim::ShellH);
 
     applyTheme(m_config.darkTheme);
 
@@ -73,15 +72,15 @@ MainWindow::MainWindow(QWidget* parent) : QWidget(parent) {
     buildTray();
     anchorBottomRight();
 
-    sphone::diag::log("MainWindow (shell desktop) criada.");
+    sphone::diag::log("MainWindow (shell compacto) criada.");
 
     QTimer::singleShot(0, this, [this] {
         if (!m_config.isComplete()) {
             m_lastStatus = QStringLiteral("Configuração incompleta");
-            m_settingsOpen = true;       // abre o painel de Configuracoes encaixado
+            m_tab = TabsBar::Settings;   // abre direto na aba Config
             m_settings->loadConfig();
             updateLayout();
-            updatePill();
+            updateStatus();
             return;                      // o registro inicia ao salvar (saved -> openSettings)
         }
         if (!m_sip) startSip();
@@ -92,7 +91,6 @@ MainWindow::MainWindow(QWidget* parent) : QWidget(parent) {
 MainWindow::~MainWindow() {
     stopRing();
     stopCallTimer();
-    stopMeter();
     stopStats();
     if (m_sip) delete m_sip;
 }
@@ -108,79 +106,35 @@ void MainWindow::buildShell() {
     m_titleBar = new TitleBar(this);
     root->addWidget(m_titleBar);
 
-    m_content = new QWidget(this);
-    // Fundo da area de conteudo = superficie do painel, para que o espaco vazio
-    // ao redor do discador (quando sozinho) nao apareca como "faixas pretas".
-    m_content->setObjectName("ContentArea");
-    // Campanha "Rumo ao Hexa" — base grafite escura premium (gradiente vertical).
-    m_content->setStyleSheet(QStringLiteral(
-        "#ContentArea{background:qlineargradient(x1:0,y1:0,x2:0,y2:1,"
-        " stop:0 #15161a, stop:0.5 #191a1f, stop:1 #101115);}"));
-    auto* h = new QHBoxLayout(m_content);
-    h->setContentsMargins(0, 0, 0, 0);
-    h->setSpacing(0);
+    m_tabsBar = new TabsBar(this);
+    root->addWidget(m_tabsBar);
 
-    m_nav      = new NavRail(m_content);
-    m_dialer   = new DialerPanel(m_content);
-    m_call     = new CallPanel(m_content);
-    m_recents  = new RecentsPanel(m_content);
-    m_settings = new SettingsPanel(&m_config, m_content);
-    m_dialer->setFixedWidth(dim::DialerW);   // coluna do discador, largura estavel
+    // Paginas empilhadas: todas ocupam a MESMA area (nada encaixa ao lado).
+    m_stack = new QStackedWidget(this);
+    m_dialer   = new DialerPanel(m_stack);
+    m_call     = new CallPanel(m_stack);
+    m_recents  = new RecentsPanel(m_stack);
+    m_settings = new SettingsPanel(&m_config, m_stack);
+    m_stack->addWidget(m_dialer);
+    m_stack->addWidget(m_call);
+    m_stack->addWidget(m_recents);
+    m_stack->addWidget(m_settings);
+    root->addWidget(m_stack, 1);
 
-    m_sep = new QFrame(m_content);
-    static_cast<QFrame*>(m_sep)->setFrameShape(QFrame::NoFrame);
-    m_sep->setFixedWidth(1);
-    m_sep->setStyleSheet(QStringLiteral("background:%1;").arg(border().name()));
-
-    // [nav | discador | sep | (chamada|recentes|config) ]  — um painel extra por vez.
-    h->addWidget(m_nav);
-    h->addWidget(m_dialer, 0);
-    h->addWidget(m_sep, 0);
-    h->addWidget(m_call, 1);
-    h->addWidget(m_recents, 1);
-    h->addWidget(m_settings, 1);
-    root->addWidget(m_content, 1);
-
-    // Sem grip de redimensionamento: a janela tem tamanho fixo (anti-esconder /
-    // layout estavel). A largura muda so por codigo ao encaixar Recentes/Config.
+    m_status = new StatusBar(this);
+    root->addWidget(m_status);
 
     wirePanels();
-    updateLayout();   // estado inicial: somente discador (centralizado)
-    updatePill();
+    updateLayout();   // estado inicial: pagina Telefone
+    updateStatus();
 }
 
 void MainWindow::wirePanels() {
     connect(m_titleBar, &TitleBar::closeClicked, this, [this] { close(); });
-
-    connect(m_nav, &NavRail::goHome, this, [this] {
-        if (m_windowLocked) return;
-        m_recentsOpen = false; m_settingsOpen = false; updateLayout(); m_dialer->focusDisplay();
-    });
-    connect(m_nav, &NavRail::toggleRecents, this, [this] {
-        if (m_windowLocked) return;
-        m_recentsOpen = !m_recentsOpen; m_settingsOpen = false; updateLayout();
-    });
-    connect(m_nav, &NavRail::toggleSettings, this, [this] {
-        if (m_windowLocked) return;
-        m_settingsOpen = !m_settingsOpen; m_recentsOpen = false;
-        if (m_settingsOpen) {
-            m_settings->loadConfig();
-            // Lista os dispositivos do motor ativo (vazio se ainda nao registrado).
-            m_settings->setAudioDevices(m_sip ? m_sip->audioDevices() : QList<sphone::AudioDevice>());
-        }
-        updateLayout();
-    });
-    connect(m_nav, &NavRail::toggleTheme,  this, [this] {
-        if (m_windowLocked) return;                 // nao reconstroi o shell durante o toque
-        m_config.darkTheme = !m_config.darkTheme;
-        m_config.save();
-        applyTheme(m_config.darkTheme);
-        rebuildShell();
-    });
-    m_nav->setRamal(m_config.username);
+    connect(m_tabsBar, &TabsBar::tabClicked, this, [this](int i) { onTabClicked(i); });
 
     connect(m_settings, &SettingsPanel::closed, this, [this] {
-        m_settingsOpen = false; updateLayout();
+        m_tab = TabsBar::Phone; updateLayout(); m_dialer->focusDisplay();
     });
     connect(m_settings, &SettingsPanel::checkUpdate, this, [this] { runUpdateCheck(this, /*silent*/ false); });
     connect(m_settings, &SettingsPanel::saved, this, [this] { openSettings(); });
@@ -214,29 +168,41 @@ void MainWindow::wirePanels() {
         if (dlg.exec() == QDialog::Accepted && !dlg.value().trimmed().isEmpty())
             m_sip->transfer(dlg.value());
     });
+    // Cluster "Teclado": em chamada, mostra o discador para digitos DTMF; a aba
+    // Telefone volta a vista da chamada.
+    connect(m_call, &CallPanel::keypadClicked, this, [this] {
+        m_dtmfPad = true;
+        updateLayout();
+        m_dialer->focusDisplay();
+    });
 
     connect(m_recents, &RecentsPanel::redial, this, [this](const QString& num) {
         // Mostra ja no formato discavel (sem +55), espelhando o que sera ligado.
         const QString norm = SipManager::normalizeDestination(num);
         m_dialer->setNumber(norm.isEmpty() ? num : norm);
+        m_tab = TabsBar::Phone;
+        updateLayout();
         m_dialer->focusDisplay();
     });
 
     m_recents->setEntries(CallHistory::all());
+    m_status->setRamal(m_config.username.trimmed());
 }
 
-void MainWindow::rebuildShell() {
-    // Remove o layout e os filhos para reconstruir com a paleta nova.
-    if (auto* lay = layout()) {
-        QLayoutItem* it;
-        while ((it = lay->takeAt(0))) { if (it->widget()) it->widget()->deleteLater(); delete it; }
-        delete lay;
+// Clique nas abas. A TabsBar nao guarda estado: a pagina efetiva (e o destaque)
+// saem sempre de updateLayout().
+void MainWindow::onTabClicked(int idx) {
+    if (m_windowLocked) return;
+    if (idx == TabsBar::Settings) {
+        m_settings->loadConfig();
+        // Lista os dispositivos do motor ativo (vazio se ainda nao registrado).
+        m_settings->setAudioDevices(m_sip ? m_sip->audioDevices() : QList<sphone::AudioDevice>());
     }
-    m_titleBar = nullptr; m_nav = nullptr; m_dialer = nullptr;
-    m_call = nullptr; m_recents = nullptr; m_settings = nullptr; m_content = nullptr;
-
-    buildShell();
-    applyState(m_sip ? m_sip->state() : LS::Offline);
+    if (idx == TabsBar::Phone) m_dtmfPad = false;   // volta a vista da chamada, se houver
+    m_tab = idx;
+    updateLayout();
+    const LS st = m_sip ? m_sip->state() : LS::Offline;
+    if (idx == TabsBar::Phone && st == LS::Idle) m_dialer->focusDisplay();
 }
 
 // =====================================================================
@@ -244,12 +210,12 @@ void MainWindow::rebuildShell() {
 // =====================================================================
 void MainWindow::startSip() {
     m_sip = new SipManager(m_config, this);
-    connect(m_sip, &SipManager::statusMessage, this, [this](const QString& m) { m_lastStatus = m; updatePill(); });
+    connect(m_sip, &SipManager::statusMessage, this, [this](const QString& m) { m_lastStatus = m; updateStatus(); });
     connect(m_sip, &SipManager::stateChanged, this, [this](LS s) { applyState(s); });
     connect(m_sip, &SipManager::incomingCallSignal, this, [this](const QString& num, const QString& name) {
         m_peerNumber = num; m_peerName = name;
     });
-    connect(m_sip, &SipManager::registrationChanged, this, [this](bool ok) { m_registered = ok; updatePill(); });
+    connect(m_sip, &SipManager::registrationChanged, this, [this](bool ok) { m_registered = ok; updateStatus(); });
     connect(m_sip, &SipManager::callStarted, m_discord, &DiscordAudit::postStart);
     connect(m_sip, &SipManager::callEnded,   m_discord, &DiscordAudit::postEnd);
     connect(m_sip, &SipManager::callEnded, this, [this](const CallAudit& c) {
@@ -257,7 +223,7 @@ void MainWindow::startSip() {
         m_recents->setEntries(CallHistory::all());
     });
 
-    m_nav->setRamal(m_config.username);
+    m_status->setRamal(m_config.username.trimmed());
     m_sip->start();
 }
 
@@ -269,7 +235,7 @@ void MainWindow::applyState(LS st) {
     if (wasCall && !nowCall) m_tones->playEnd();
 
     if (st != LS::Ringing) stopRing();
-    if (st != LS::InCall) { stopCallTimer(); stopMeter(); stopStats(); }
+    if (st != LS::InCall) { stopCallTimer(); stopStats(); }
     if (st != LS::Calling) m_tones->stopRingback();
     if (st != LS::Ringing && m_ringing) { m_ringing = false; setTopMost(false); }
 
@@ -287,6 +253,8 @@ void MainWindow::applyState(LS st) {
         case LS::Ringing:
             m_call->setPeer(m_peerName, m_peerNumber);
             m_call->setView(CallPanel::View::Incoming);
+            m_tab = TabsBar::Phone;
+            m_dtmfPad = false;
             m_ringing = true;
             bringToForeground();
             setTopMost(true);
@@ -296,64 +264,42 @@ void MainWindow::applyState(LS st) {
             m_call->setPeer(m_peerName, m_peerNumber);
             m_call->resetControls();
             m_call->setView(CallPanel::View::Outgoing);
+            m_tab = TabsBar::Phone;
+            m_dtmfPad = false;
             m_tones->startRingback();
             break;
         case LS::InCall:
             m_call->setPeer(m_peerName, m_peerNumber);
             m_call->setView(CallPanel::View::Active);
             startCallTimer();
-            startMeter();
             startStats();
             break;
     }
     updateLayout();
-    updatePill();
+    updateStatus();
 }
 
-// Visibilidade dos paineis: padrao = so discador; Recentes encaixa sob demanda;
-// chamada de saida/ativa encaixa ao lado; chamada RECEBIDA toma a tela + trava.
+// Escolha da pagina do stack: chamada RECEBIDA forca a pagina de chamada e
+// trava a janela; chamada de saida/ativa mostra a chamada na aba Telefone
+// (com o discador acessivel via cluster "Teclado" p/ DTMF); sem chamada, a
+// pagina segue a aba escolhida. A janela NUNCA muda de tamanho.
 void MainWindow::updateLayout() {
     const LS st = m_sip ? m_sip->state() : LS::Offline;
-    const bool incoming   = (st == LS::Ringing);
-    const bool callDocked = (st == LS::Calling || st == LS::InCall);
-    const bool alone = !incoming && !callDocked && !m_recentsOpen && !m_settingsOpen;
+    const bool incoming = (st == LS::Ringing);
+    const bool inCall   = (st == LS::Calling || st == LS::InCall);
+    if (!inCall) m_dtmfPad = false;
 
-    if (incoming) {
-        m_dialer->hide(); m_recents->hide(); m_settings->hide(); m_sep->hide();
-        m_call->show();
-        setWindowLocked(true);
-    } else {
-        setWindowLocked(false);
-        m_dialer->show();
-        m_call->setVisible(callDocked);                   // um painel extra por vez
-        m_recents->setVisible(!callDocked && m_recentsOpen);
-        m_settings->setVisible(!callDocked && m_settingsOpen);
-        m_sep->setVisible(!alone);
-    }
-    if (m_nav) {
-        NavRail::Active a = NavRail::Active::Home;
-        if (!incoming && !callDocked) {
-            if (m_settingsOpen)      a = NavRail::Active::Settings;
-            else if (m_recentsOpen)  a = NavRail::Active::Recents;
-        }
-        m_nav->setActive(a);
-    }
+    setWindowLocked(incoming);
+    if (m_tabsBar) m_tabsBar->setLocked(incoming);
 
-    // Largura da janela: so o discador => estreita (colado a lateral, sem vazio);
-    // com painel extra ou chamada => larga. Ao mudar de largura, reancora no canto
-    // inferior direito (cresce/encolhe para a esquerda, sempre preso ao canto).
-    if (!isMaximized()) {
-        const int aloneW  = dim::RailW + dim::DialerW;
-        // Chamada recebida (takeover) mantem o tamanho cheio; os demais estados
-        // usam o shell compacto. Janela sem grip: tamanho e 100% controlado aqui.
-        const int targetW = incoming ? dim::RingW : alone ? aloneW : dim::ShellW;
-        const int targetH = incoming ? dim::RingH : dim::ShellH;
-        setMinimumWidth(alone ? aloneW : dim::ShellMinW);
-        if (width() != targetW || height() != targetH) {
-            resize(targetW, targetH);
-            anchorBottomRight();
-        }
-    }
+    QWidget* page = nullptr;
+    if (incoming)               page = m_call;
+    else if (m_tab == TabsBar::Recents)  page = m_recents;
+    else if (m_tab == TabsBar::Settings) page = m_settings;
+    else                        page = (inCall && !m_dtmfPad) ? static_cast<QWidget*>(m_call)
+                                                              : static_cast<QWidget*>(m_dialer);
+    if (m_stack) m_stack->setCurrentWidget(page);
+    if (m_tabsBar) m_tabsBar->setCurrent(incoming ? TabsBar::Phone : m_tab);
 }
 
 void MainWindow::setWindowLocked(bool on) {
@@ -381,17 +327,24 @@ void MainWindow::sendDtmfIfInCall(QChar key) {
     m_sip->sendDtmf(digit);
 }
 
-void MainWindow::updatePill() {
-    if (!m_titleBar) return;
+void MainWindow::updateStatus() {
+    if (!m_status) return;
     const LS st = m_sip ? m_sip->state() : LS::Offline;
-    bool ok = m_registered && (st == LS::Idle || st == LS::Calling || st == LS::InCall || st == LS::Ringing);
-    // Registrado mostra o ramal logado (campanha); demais estados, o status.
-    const QString ramal = m_config.username.trimmed();
-    QString text = ok ? (ramal.isEmpty() ? QStringLiteral("REGISTRADO") : ramal)
-                 : st == LS::Registering ? QStringLiteral("CONECTANDO")
-                 : st == LS::Offline ? QStringLiteral("OFFLINE")
-                 : m_lastStatus.toUpper();
-    m_titleBar->setRegistered(ok, text);
+    const bool ok = m_registered
+        && (st == LS::Idle || st == LS::Calling || st == LS::InCall || st == LS::Ringing);
+    QString text;
+    if (ok) {
+        text = st == LS::InCall  ? QStringLiteral("Em chamada")
+             : st == LS::Calling ? QStringLiteral("Chamando…")
+             : st == LS::Ringing ? QStringLiteral("Recebendo chamada")
+             : QStringLiteral("Disponível");
+    } else {
+        // Fora do ar, m_lastStatus carrega o motivo (config incompleta, falha
+        // de registro, etc.) — mais util que um "Offline" generico.
+        text = st == LS::Registering ? QStringLiteral("Conectando…") : m_lastStatus;
+    }
+    m_status->setStatus(ok, text);
+    m_status->setRamal(m_config.username.trimmed());
 }
 
 // =====================================================================
@@ -417,25 +370,7 @@ void MainWindow::stopCallTimer() {
     if (m_callTimer) { m_callTimer->stop(); m_callTimer->deleteLater(); m_callTimer = nullptr; }
 }
 
-// Alimenta o waveform com o nivel de audio real (RX/TX combinado, peak-hold).
-void MainWindow::startMeter() {
-    stopMeter();
-    m_levelShown = 0;
-    m_meterTimer = new QTimer(this);
-    m_meterTimer->setInterval(45);   // ~22 Hz -> janela de ~2.5s nos 56 bars
-    connect(m_meterTimer, &QTimer::timeout, this, [this] {
-        if (!m_sip) return;
-        const float lvl = std::max(m_sip->micLevel(), m_sip->speakerLevel());
-        m_levelShown = lvl > m_levelShown ? lvl : m_levelShown * 0.78f;   // peak-hold
-        m_call->pushAudioLevel(m_levelShown);
-    });
-    m_meterTimer->start();
-}
-void MainWindow::stopMeter() {
-    if (m_meterTimer) { m_meterTimer->stop(); m_meterTimer->deleteLater(); m_meterTimer = nullptr; }
-}
-
-// Telemetria do rodape de Recentes: codec / latencia / barras de sinal (~1 Hz).
+// Telemetria do rodape de Registros: codec / latencia / barras de sinal (~1 Hz).
 void MainWindow::startStats() {
     stopStats();
     m_statsTimer = new QTimer(this);
@@ -565,25 +500,20 @@ void MainWindow::tryExit() {
     }
 }
 
-// Aplica o que o SettingsPanel gravou no config (sinal saved): salva, fecha o
-// painel, troca o tema se mudou, reinicia o registro SIP.
+// Aplica o que o SettingsPanel gravou no config (sinal saved): salva, volta a
+// aba Telefone, reinicia o registro SIP.
 void MainWindow::openSettings() {
     m_config.save();
     m_lastStatus = QStringLiteral("Configurações salvas. Reiniciando registro…");
 
-    const bool themeChanged = (m_config.darkTheme != isDark());
-    m_settingsOpen = false;
-    if (themeChanged) {
-        applyTheme(m_config.darkTheme);
-        rebuildShell();            // recria o shell ja com o painel fechado
-    } else {
-        updateLayout();
-    }
-    if (m_nav) m_nav->setRamal(m_config.username);
+    m_tab = TabsBar::Phone;
+    updateLayout();
+    m_status->setRamal(m_config.username.trimmed());
 
     if (m_sip) { m_tones->stopRingback(); stopRing(); delete m_sip; m_sip = nullptr; m_registered = false; }
     if (m_config.isComplete()) startSip();
-    updatePill();
+    updateStatus();
+    m_dialer->focusDisplay();
 }
 
 void MainWindow::anchorBottomRight() {
@@ -658,7 +588,7 @@ bool MainWindow::nativeEvent(const QByteArray&, void* message, qintptr* result) 
         const WPARAM cmd = msg->wParam & 0xFFF0;
         // Janela fixa e anti-esconder: bloqueia minimizar, mover, maximizar e
         // redimensionar nativos (menu do sistema/Alt+Espaco, Win+setas, clique
-        // na barra de tarefas). O tamanho muda so por codigo (encaixe de paineis).
+        // na barra de tarefas). O tamanho e fixo e a posicao ancorada por codigo.
         if (cmd == SC_MINIMIZE || cmd == SC_MOVE || cmd == SC_MAXIMIZE || cmd == SC_SIZE) {
             if (result) *result = 0;
             return true;

@@ -314,49 +314,4 @@ void Waveform::paintEvent(QPaintEvent*) {
     }
 }
 
-// ---------------------------------------------------------------------------
-// RegPill
-// ---------------------------------------------------------------------------
-RegPill::RegPill(QWidget* parent) : QWidget(parent) {
-    setAttribute(Qt::WA_TranslucentBackground);
-    setFixedHeight(26);
-}
-void RegPill::setRegistered(bool ok, const QString& text) {
-    m_ok = ok; m_text = text;
-    updateGeometry(); update();
-}
-// Registrado mostra o ramal em destaque; os demais status, texto tecnico menor.
-static QFont pillFont(bool ok) { return ok ? fontPanelTitle(10.5) : fontTelemetry(8); }
-
-QSize RegPill::sizeHint() const {
-    QFontMetricsF fm(pillFont(m_ok));
-    return QSize(int(fm.horizontalAdvance(m_text) + 44), 26);
-}
-void RegPill::paintEvent(QPaintEvent*) {
-    QPainter g(this);
-    g.setRenderHint(QPainter::Antialiasing);
-    g.setRenderHint(QPainter::TextAntialiasing);
-
-    QRectF r(0.5, (height() - 24) / 2.0, width() - 1, 24);
-    QPainterPath path; path.addRoundedRect(r, 12, 12);
-    g.fillPath(path, QColor(255, 255, 255, 28));
-    g.strokePath(path, QPen(QColor(255, 255, 255, 40), 1));
-
-    const double dot = 8, dx = 14, midY = height() / 2.0;
-    const QColor statusCol = m_ok ? QColor(0x33, 0xE0, 0xA0) : sig().red;  // verde campanha
-    g.setPen(Qt::NoPen);
-    if (m_ok) {                                 // halo sutil do ponto verde
-        QColor halo = statusCol; halo.setAlpha(64);
-        g.setBrush(halo);
-        g.drawEllipse(QRectF(dx - 3, midY - dot / 2.0 - 3, dot + 6, dot + 6));
-    }
-    g.setBrush(statusCol);
-    g.drawEllipse(QRectF(dx, midY - dot / 2.0, dot, dot));
-
-    g.setFont(pillFont(m_ok));
-    g.setPen(m_ok ? QColor(0xEA, 0xFF, 0xF2) : QColor(0xCF, 0xEA, 0xFB));
-    g.drawText(QRectF(dx + dot + 7, 0, width() - (dx + dot + 7) - 12, height()),
-               Qt::AlignVCenter | Qt::AlignLeft, m_text);
-}
-
 }  // namespace sphone

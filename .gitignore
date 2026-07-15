@@ -3,6 +3,7 @@
 
 # Build
 /build/
+/build-debug/
 /build-pjsip/
 /dist/
 /out/

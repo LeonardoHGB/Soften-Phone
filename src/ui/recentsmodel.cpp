@@ -42,12 +42,12 @@ QString formatWhen(const QDateTime& when) {
     return when.toString("dd/MM");
 }
 
-constexpr int kRowH = 64;
+constexpr int kRowH = 56;
 
 // Retangulo do botao "ligar" (circulo a direita da linha).
 QRectF callBtnRect(const QRect& row) {
-    const double d = 38;
-    return QRectF(row.right() - 10 - d, row.center().y() - d / 2.0, d, d);
+    const double d = 32;
+    return QRectF(row.right() - 8 - d, row.center().y() - d / 2.0, d, d);
 }
 
 bool isMissed(const CallAudit& c) {
@@ -128,42 +128,48 @@ void CallLogDelegate::paint(QPainter* p, const QStyleOptionViewItem& opt, const 
                         : (c.peerNumber.trimmed().isEmpty() ? QStringLiteral("Desconhecido") : c.peerNumber);
 
     // Avatar (circulo + iniciais).
-    const double av = 40, ax = r.left() + 12, ay = r.center().y() - av / 2.0;
+    const double av = 34, ax = r.left() + 8, ay = r.center().y() - av / 2.0;
     QRectF avRect(ax, ay, av, av);
     p->setPen(Qt::NoPen);
     p->setBrush(avatarColor(title));
     p->drawEllipse(avRect);
-    p->setFont(fontPanelTitle(11));
+    p->setFont(fontPanelTitle(10));
     p->setPen(Qt::white);
     p->drawText(avRect, Qt::AlignCenter, initialsFrom(c.peerName, c.peerNumber));
 
-    const double tx = ax + av + 12;
-    const double tw = callBtnRect(r).left() - 10 - tx;
+    // Colunas da linha estreita: [avatar | titulo/sub | hora | botao].
+    const QRectF cb = callBtnRect(r);
+    const double tx = ax + av + 10;
+    const QRectF timeRect(cb.left() - 6 - 40, r.top() + 10, 40, 14);
+    const double titleW = timeRect.left() - 4 - tx;
+    const double subW   = cb.left() - 6 - tx;
 
-    // Nome.
-    p->setFont(fontLabel(11));
+    // Nome (com elipse: a coluna e curta).
+    QFont tf = fontLabel(10.5);
+    p->setFont(tf);
     p->setPen(textPrimary());
-    p->drawText(QRectF(tx, r.top() + 13, tw, 20), Qt::AlignVCenter | Qt::AlignLeft, title);
+    const QString elided = QFontMetrics(tf).elidedText(title, Qt::ElideRight, int(titleW));
+    p->drawText(QRectF(tx, r.top() + 10, titleW, 18), Qt::AlignVCenter | Qt::AlignLeft, elided);
 
     // Direcao (seta) + numero/desfecho.
     const QString arrow = inbound ? QStringLiteral("↙") : QStringLiteral("↗");
     const QString sub = QStringLiteral("%1  %2").arg(arrow, c.peerNumber.isEmpty() ? c.outcome : c.peerNumber);
-    p->setFont(fontLabel(9));
+    QFont sf = fontLabel(8.5);
+    p->setFont(sf);
     p->setPen(missed ? sig().red : textSecondary());
-    p->drawText(QRectF(tx, r.top() + 33, tw, 18), Qt::AlignVCenter | Qt::AlignLeft, sub);
+    p->drawText(QRectF(tx, r.top() + 29, subW, 16), Qt::AlignVCenter | Qt::AlignLeft,
+                QFontMetrics(sf).elidedText(sub, Qt::ElideRight, int(subW)));
 
-    // Hora (canto sup-direito, antes do botao).
-    p->setFont(fontTelemetry(8));
+    // Hora (coluna propria, antes do botao — nao invade o titulo).
+    p->setFont(fontTelemetry(7.5));
     p->setPen(textTertiary());
-    p->drawText(QRectF(callBtnRect(r).left() - 70, r.top() + 12, 64, 16),
-                Qt::AlignRight | Qt::AlignVCenter, formatWhen(c.startedLocal));
+    p->drawText(timeRect, Qt::AlignRight | Qt::AlignVCenter, formatWhen(c.startedLocal));
 
     // Botao ligar.
-    const QRectF cb = callBtnRect(r);
     p->setPen(Qt::NoPen);
     p->setBrush(blend(sig().cyan, bodyBg(), 0.84));
     p->drawEllipse(cb);
-    p->setFont(iconPx(15));
+    p->setFont(iconPx(13));
     p->setPen(sig().cyan);
     p->drawText(cb, Qt::AlignCenter, glyph::Phone);
 

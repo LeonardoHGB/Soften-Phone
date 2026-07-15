@@ -227,16 +227,14 @@ inline QColor blend(const QColor& a, const QColor& b, double t) {
 // Dimensoes-chave (px). Ver spec secao 2.3 / 2.x.
 // ---------------------------------------------------------------------------
 namespace dim {
-// --- Shell desktop "Signal Architecture" (3 paineis + rail + titlebar) ---
-inline constexpr int ShellW = 900, ShellH = 620;    // tamanho da janela com painel extra encaixado
-inline constexpr int ShellMinW = 760, ShellMinH = 560;
-inline constexpr int RingW = 1080, RingH = 700;     // chamada RECEBIDA (takeover): mantem o tamanho cheio
-inline constexpr int RailW = 84;                    // largura do nav rail
-inline constexpr int DialerW = 300;                 // largura da coluna do discador
-inline constexpr int TitleBarH = 56;                // altura da barra de titulo
-inline constexpr int WindowRadius = 16;             // cantos da janela frameless
-inline constexpr int CardRadius = 14;               // display, busca, cards
-inline constexpr int PanelPad = 28;                 // respiro interno dos paineis
+// --- Shell compacto estilo MicroSIP: janela UNICA fixa, paginas empilhadas ---
+inline constexpr int ShellW = 252, ShellH = 470;    // tamanho FIXO da janela (todos os estados)
+inline constexpr int TitleBarH = 36;                // barra de titulo compacta
+inline constexpr int TabsH = 30;                    // faixa de abas (Telefone/Registros/Config)
+inline constexpr int StatusH = 24;                  // barra de status inferior
+inline constexpr int WindowRadius = 12;             // cantos da janela frameless
+inline constexpr int CardRadius = 10;               // display, busca, cards
+inline constexpr int PanelPad = 12;                 // respiro interno dos paineis
 
 // --- Widget de canto legado (mantido p/ compat dos controles antigos) ---
 inline constexpr int WinW = 360,  WinH = 560;       // MainWindow client size

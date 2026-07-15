@@ -1,14 +1,12 @@
 #include "ui/panels.h"
 #include "ui/signalwidgets.h"
 #include "ui/recentsmodel.h"
-#include "ui/controls.h"
 #include "core/brand.h"
 #include "core/version.h"
 #include "data/sipconfig.h"
 
 #include <QPainter>
 #include <QPainterPath>
-#include <QPolygonF>
 #include <QPaintEvent>
 #include <QMouseEvent>
 #include <QResizeEvent>
@@ -66,10 +64,23 @@ QLabel* mkLabel(const QString& text, const QFont& f, const QColor& c,
     return l;
 }
 
-// Marcador tecnico "— NN" (canto sup-direito dos paineis).
-QLabel* mkMarker(const QString& text, QWidget* parent) {
-    return mkLabel(text, fontTelemetry(8.5), textTertiary(),
-                   Qt::AlignRight | Qt::AlignVCenter, parent);
+// Fundo grafite padrao das paginas (gradiente vertical).
+void paintPageBg(QWidget* w) {
+    QPainter g(w);
+    QLinearGradient bg(w->rect().topLeft(), w->rect().bottomLeft());
+    bg.setColorAt(0.0, QColor(0x15, 0x16, 0x1a));
+    bg.setColorAt(0.5, QColor(0x19, 0x1a, 0x1f));
+    bg.setColorAt(1.0, QColor(0x10, 0x11, 0x15));
+    g.fillRect(w->rect(), bg);
+}
+
+// Esmaece + desabilita um botao (chrome/abas durante o toque).
+void dimButton(QPushButton* b, bool locked) {
+    if (!b) return;
+    b->setEnabled(!locked);
+    auto* eff = qobject_cast<QGraphicsOpacityEffect*>(b->graphicsEffect());
+    if (!eff) { eff = new QGraphicsOpacityEffect(b); b->setGraphicsEffect(eff); }
+    eff->setOpacity(locked ? 0.35 : 1.0);
 }
 
 }  // namespace
@@ -81,61 +92,36 @@ TitleBar::TitleBar(QWidget* parent) : QWidget(parent) {
     setFixedHeight(dim::TitleBarH);
 
     auto* h = new QHBoxLayout(this);
-    h->setContentsMargins(18, 0, 12, 0);
-    h->setSpacing(10);
+    h->setContentsMargins(10, 0, 6, 3);   // 3px de folga p/ a faixa tricolor
+    h->setSpacing(8);
 
     // Marca: logo oficial da Soften (cores originais) + "SOFTEN PHONE".
     auto* logo = new QLabel(this);
     QPixmap logoPix(":/assets/logo.png");
     if (!logoPix.isNull())
-        logo->setPixmap(logoPix.scaled(28, 28, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+        logo->setPixmap(logoPix.scaled(20, 20, Qt::KeepAspectRatio, Qt::SmoothTransformation));
     logo->setAttribute(Qt::WA_TransparentForMouseEvents);
     h->addWidget(logo);
 
-    auto* brandBox = new QVBoxLayout();
-    brandBox->setContentsMargins(0, 0, 0, 0);
-    brandBox->setSpacing(0);
-    brandBox->addStretch();
-    brandBox->addWidget(mkLabel(QStringLiteral("SOFTEN PHONE"), fontPanelTitle(11.5), Qt::white));
-    brandBox->addStretch();
-    h->addLayout(brandBox);
-
+    h->addWidget(mkLabel(QStringLiteral("SOFTEN PHONE"), fontPanelTitle(9.5), Qt::white));
     h->addStretch();
-
-    m_pill = new RegPill(this);
-    h->addWidget(m_pill);
-    h->addSpacing(8);
 
     // Chrome: apenas fechar. Nao ha minimizar (esconder e proibido) e a janela
     // nao pode ser arrastada/movida — anti-esconder.
-    auto mkChrome = [this](const QString& g, const QColor& hov) {
-        auto* b = new QPushButton(g, this);
-        b->setFont(iconPx(11));
-        b->setFixedSize(34, 30);
-        b->setCursor(Qt::PointingHandCursor);
-        b->setStyleSheet(QStringLiteral(
-            "QPushButton{border:none;background:transparent;color:#CFEAFB;border-radius:7px;}"
-            "QPushButton:hover{background:%1;color:#ffffff;}").arg(hov.name()));
-        return b;
-    };
-    m_close = mkChrome(QString(QChar(0xE8BB)), QColor(0xE2, 0x45, 0x3D));
+    m_close = new QPushButton(QString(QChar(0xE8BB)), this);
+    m_close->setFont(iconPx(10));
+    m_close->setFixedSize(30, 26);
+    m_close->setCursor(Qt::PointingHandCursor);
+    m_close->setStyleSheet(QStringLiteral(
+        "QPushButton{border:none;background:transparent;color:#CFEAFB;border-radius:6px;}"
+        "QPushButton:hover{background:#E2453D;color:#ffffff;}"));
     connect(m_close, &QPushButton::clicked, this, &TitleBar::closeClicked);
     h->addWidget(m_close);
 }
 
-void TitleBar::setRegistered(bool ok, const QString& text) { m_pill->setRegistered(ok, text); }
-
 void TitleBar::setLocked(bool locked) {
     m_locked = locked;
-    // Chrome desabilitado e esmaecido enquanto travado (chamada recebida).
-    const double op = locked ? 0.35 : 1.0;
-    for (QPushButton* b : { m_close }) {
-        if (!b) continue;
-        b->setEnabled(!locked);
-        auto* eff = qobject_cast<QGraphicsOpacityEffect*>(b->graphicsEffect());
-        if (!eff) { eff = new QGraphicsOpacityEffect(b); b->setGraphicsEffect(eff); }
-        eff->setOpacity(op);
-    }
+    dimButton(m_close, locked);
 }
 
 void TitleBar::paintEvent(QPaintEvent*) {
@@ -160,78 +146,100 @@ void TitleBar::paintEvent(QPaintEvent*) {
 // handlers de mouse, a TitleBar nao move o top-level.
 
 // ===========================================================================
-//  NavRail
+//  TabsBar
 // ===========================================================================
-NavRail::NavRail(QWidget* parent) : QWidget(parent) {
-    setFixedWidth(dim::RailW);
+TabsBar::TabsBar(QWidget* parent) : QWidget(parent) {
+    setFixedHeight(dim::TabsH);
 
-    auto* v = new QVBoxLayout(this);
-    v->setContentsMargins(0, 16, 0, 16);
-    v->setSpacing(8);
-    v->setAlignment(Qt::AlignHCenter);
+    auto* h = new QHBoxLayout(this);
+    h->setContentsMargins(0, 0, 0, 1);   // 1px p/ a divisoria inferior
+    h->setSpacing(0);
 
-    auto mkItem = [this](const QString& glyph, bool active) {
-        auto* b = new RoundGlyphButton(this);
-        b->shape = RoundGlyphButton::Shape::RoundedSquare;
-        b->squareRadius = 12;
-        b->setFixedSize(48, 44);
-        b->glyph = glyph;
-        b->glyphSize = 17;
-        b->idleGlyph = QColor(0x7A, 0x7B, 0x82);          // cinza grafite
-        b->idleFill = Qt::transparent;
-        b->activeFill = QColor(0x2A, 0x25, 0x19);          // dourado bem escuro
-        b->activeGlyph = QColor(0xD4, 0xAF, 0x37);         // dourado
-        b->setActive(active);
-        return b;
-    };
-
-    m_keypadBtn = mkItem(glyph::Dialpad, true);
-    m_recentsBtn = mkItem(glyph::History, false);
-    m_settingsBtn = mkItem(glyph::Settings, false);
-    connect(m_keypadBtn,   &RoundGlyphButton::clicked, this, &NavRail::goHome);
-    connect(m_recentsBtn,  &RoundGlyphButton::clicked, this, &NavRail::toggleRecents);
-    connect(m_settingsBtn, &RoundGlyphButton::clicked, this, &NavRail::toggleSettings);
-    v->addWidget(m_keypadBtn, 0, Qt::AlignHCenter);
-    v->addWidget(m_recentsBtn, 0, Qt::AlignHCenter);
-    v->addWidget(m_settingsBtn, 0, Qt::AlignHCenter);
-
-    v->addStretch();
-
-    // Botao de tema (claro/escuro) removido por ora — tema fixo grafite.
-    // O sinal toggleTheme permanece para quando voltar.
-
-    v->addSpacing(6);
-    // Avatar do usuario (silhueta). O ramal agora aparece na pilula do header.
-    m_badge = new QLabel(glyph::Contact, this);
-    m_badge->setFixedSize(40, 40);
-    m_badge->setAlignment(Qt::AlignCenter);
-    m_badge->setFont(iconPx(18));
-    m_badge->setStyleSheet(QStringLiteral(
-        "color:#dceaf5;"
-        "background:qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #4a4226, stop:1 #2a2519);"
-        "border:2px solid #d4af37;border-radius:20px;"));
-    v->addWidget(m_badge, 0, Qt::AlignHCenter);
+    const char* names[] = { "Telefone", "Registros", "Config" };
+    for (int i = 0; i < 3; ++i) {
+        auto* b = new QPushButton(QString::fromUtf8(names[i]), this);
+        b->setCursor(Qt::PointingHandCursor);
+        b->setFont(fontLabel(9.5));
+        b->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+        connect(b, &QPushButton::clicked, this, [this, i] { emit tabClicked(i); });
+        m_btns << b;
+        h->addWidget(b, 1);
+    }
+    setCurrent(0);
 }
 
-void NavRail::setRamal(const QString& /*ramal*/) {
-    // Avatar fixo (silhueta); o ramal e exibido na pilula de registro do header.
+void TabsBar::setCurrent(int idx) {
+    m_current = idx;
+    for (int i = 0; i < m_btns.size(); ++i) {
+        const bool on = (i == idx);
+        m_btns[i]->setStyleSheet(on
+            ? QStringLiteral(
+                "QPushButton{border:none;border-bottom:2px solid #d4af37;"
+                "background:transparent;color:#d4af37;}")
+            : QStringLiteral(
+                "QPushButton{border:none;border-bottom:2px solid transparent;"
+                "background:transparent;color:#7a7b82;}"
+                "QPushButton:hover{color:#eef4fb;}"));
+    }
 }
 
-void NavRail::setActive(Active a) {
-    if (m_keypadBtn)   m_keypadBtn->setActive(a == Active::Home);
-    if (m_recentsBtn)  m_recentsBtn->setActive(a == Active::Recents);
-    if (m_settingsBtn) m_settingsBtn->setActive(a == Active::Settings);
+void TabsBar::setLocked(bool locked) {
+    m_locked = locked;
+    for (QPushButton* b : m_btns) dimButton(b, locked);
 }
 
-void NavRail::paintEvent(QPaintEvent*) {
+void TabsBar::paintEvent(QPaintEvent*) {
     QPainter g(this);
-    // Sidebar grafite quase preto (gradiente vertical sutil).
-    QLinearGradient grad(0, 0, 0, height());
-    grad.setColorAt(0.0, QColor(0x0D, 0x0E, 0x11));
-    grad.setColorAt(1.0, QColor(0x0A, 0x0B, 0x0D));
-    g.fillRect(rect(), grad);
+    g.fillRect(rect(), QColor(0x0D, 0x0E, 0x11));
     g.setPen(QPen(QColor(0x1A, 0x1B, 0x1F), 1));
-    g.drawLine(width() - 1, 0, width() - 1, height());
+    g.drawLine(0, height() - 1, width(), height() - 1);
+}
+
+// ===========================================================================
+//  StatusBar
+// ===========================================================================
+StatusBar::StatusBar(QWidget* parent) : QWidget(parent) {
+    setFixedHeight(dim::StatusH);
+}
+
+void StatusBar::setStatus(bool ok, const QString& text) {
+    m_ok = ok; m_text = text;
+    update();
+}
+
+void StatusBar::setRamal(const QString& ramal) {
+    m_ramal = ramal;
+    update();
+}
+
+void StatusBar::paintEvent(QPaintEvent*) {
+    QPainter g(this);
+    g.setRenderHint(QPainter::Antialiasing);
+    g.setRenderHint(QPainter::TextAntialiasing);
+    g.fillRect(rect(), QColor(0x0D, 0x0E, 0x11));
+    g.setPen(QPen(QColor(0x1A, 0x1B, 0x1F), 1));
+    g.drawLine(0, 0, width(), 0);
+
+    // Ponto de status + texto (esq).
+    const double dot = 7, midY = height() / 2.0;
+    const QColor statusCol = m_ok ? QColor(0x33, 0xE0, 0xA0) : QColor(0xF5, 0xB3, 0x01);
+    g.setPen(Qt::NoPen);
+    g.setBrush(statusCol);
+    g.drawEllipse(QRectF(10, midY - dot / 2.0, dot, dot));
+
+    g.setFont(fontLabel(8.5));
+    g.setPen(m_ok ? QColor(0xEE, 0xF4, 0xFB) : QColor(0x8A, 0x8B, 0x92));
+    const int ramalW = 70;
+    g.drawText(QRectF(10 + dot + 7, 0, width() - (10 + dot + 7) - ramalW, height()),
+               Qt::AlignVCenter | Qt::AlignLeft, m_text);
+
+    // Ramal (dir), em mono dourado.
+    if (!m_ramal.isEmpty()) {
+        g.setFont(fontTelemetry(9));
+        g.setPen(QColor(0xD4, 0xAF, 0x37));
+        g.drawText(QRectF(width() - ramalW - 10, 0, ramalW, height()),
+                   Qt::AlignVCenter | Qt::AlignRight, m_ramal);
+    }
 }
 
 // ===========================================================================
@@ -239,33 +247,21 @@ void NavRail::paintEvent(QPaintEvent*) {
 // ===========================================================================
 DialerPanel::DialerPanel(QWidget* parent) : QWidget(parent) {
     auto* v = new QVBoxLayout(this);
-    v->setContentsMargins(dim::PanelPad, 24, dim::PanelPad, 24);
+    v->setContentsMargins(dim::PanelPad, 10, dim::PanelPad, dim::PanelPad);
     v->setSpacing(0);
-
-    // Cabecalho: titulo + sub | marcador.
-    auto* head = new QHBoxLayout();
-    head->setContentsMargins(0, 0, 0, 0);
-    auto* titleBox = new QVBoxLayout();
-    titleBox->setSpacing(2);
-    titleBox->addWidget(mkLabel(QStringLiteral("Discador"), fontPanelTitle(17), QColor(0xEE, 0xF4, 0xFB)));
-    titleBox->addWidget(mkLabel(QStringLiteral("TECLADO · SIP/RTP"), fontTelemetry(8), QColor(0x8A, 0x8B, 0x92)));
-    head->addLayout(titleBox);
-    head->addStretch();
-    v->addLayout(head);
-    v->addSpacing(20);
 
     // Display: card com numero (mono) + backspace.
     auto* card = new QWidget(this);
     card->setObjectName("DialDisplay");
-    card->setFixedHeight(66);
+    card->setFixedHeight(46);
     card->setStyleSheet(QStringLiteral(
         "#DialDisplay{background:qlineargradient(x1:0,y1:0,x2:1,y2:0,"
         " stop:0 #1d1e23, stop:1 #17181c);border:1px solid #34353c;border-radius:%1px;}")
         .arg(dim::CardRadius));
     auto* ch = new QHBoxLayout(card);
-    ch->setContentsMargins(18, 6, 10, 6);
+    ch->setContentsMargins(12, 4, 6, 4);
     m_display = new QLineEdit(card);
-    m_display->setFont(fontDisplay(23));
+    m_display->setFont(fontDisplay(16));
     m_display->setPlaceholderText(QStringLiteral("número"));
     m_display->setStyleSheet(QStringLiteral(
         "QLineEdit{background:transparent;border:none;color:#eef4fb;}"));
@@ -279,20 +275,20 @@ DialerPanel::DialerPanel(QWidget* parent) : QWidget(parent) {
     ch->addWidget(m_display, 1);
 
     auto* back = new RoundGlyphButton(card);
-    back->setFixedSize(40, 40);
+    back->setFixedSize(32, 32);
     back->glyph = glyph::Backspace;
-    back->glyphSize = 16;
+    back->glyphSize = 13;
     back->idleGlyph = textSecondary();
     connect(back, &RoundGlyphButton::clicked, this, [this] {
         m_display->backspace();
     });
     ch->addWidget(back, 0);
     v->addWidget(card);
-    v->addSpacing(18);
+    v->addSpacing(10);
 
     // Teclado 3x4.
     auto* grid = new QGridLayout();
-    grid->setSpacing(12);
+    grid->setSpacing(8);
     struct K { const char* k; const char* l; };
     static const K keys[12] = {
         {"1", ""}, {"2", "ABC"}, {"3", "DEF"},
@@ -305,7 +301,7 @@ DialerPanel::DialerPanel(QWidget* parent) : QWidget(parent) {
         key->keyChar = QString::fromUtf8(keys[i].k);
         key->letters = QString::fromUtf8(keys[i].l);
         key->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-        key->setMinimumSize(56, 56);
+        key->setMinimumSize(44, 44);
         const QString kc = key->keyChar;
         connect(key, &KeypadButton::clicked, this, [this, kc] {
             if (!kc.isEmpty()) emit keyTone(kc[0]);
@@ -314,23 +310,22 @@ DialerPanel::DialerPanel(QWidget* parent) : QWidget(parent) {
         grid->addWidget(key, i / 3, i % 3);
     }
     v->addLayout(grid, 1);
-    v->addSpacing(16);
+    v->addSpacing(10);
 
-    // Acao: botao chamar centralizado, com halo pulsante.
-    auto* actions = new QHBoxLayout();
-    actions->setContentsMargins(0, 0, 0, 0);
-    actions->addStretch();
-    m_call = new CallButton(this);
-    m_call->setFixedSize(72, 72);
-    m_call->top  = QColor(0xF5, 0xD7, 0x7A);   // dourado claro (topo)
-    m_call->base = QColor(0xD4, 0xAF, 0x37);   // dourado (base)
-    m_call->glyphColor = QColor(0x15, 0x16, 0x1A);  // handset escuro sobre o dourado
-    m_call->glyph = glyph::Phone;
-    m_call->glow = false;          // sem halo/fade em volta
-    connect(m_call, &CallButton::clicked, this, &DialerPanel::callRequested);
-    actions->addWidget(m_call);
-    actions->addStretch();
-    v->addLayout(actions);
+    // Acao: barra "Chamar" larga (estilo MicroSIP), dourada.
+    m_call = new QPushButton(QStringLiteral("Chamar"), this);
+    m_call->setCursor(Qt::PointingHandCursor);
+    m_call->setFont(fontPanelTitle(11));
+    m_call->setFixedHeight(42);
+    m_call->setStyleSheet(QStringLiteral(
+        "QPushButton{background:qlineargradient(x1:0,y1:0,x2:0,y2:1,"
+        " stop:0 #f5d77a, stop:1 #d4af37);border:none;border-radius:%1px;color:#15161a;}"
+        "QPushButton:hover{background:qlineargradient(x1:0,y1:0,x2:0,y2:1,"
+        " stop:0 #f8e09a, stop:1 #ddba45);}"
+        "QPushButton:disabled{background:#26272d;color:#5a5b62;}")
+        .arg(dim::CardRadius));
+    connect(m_call, &QPushButton::clicked, this, &DialerPanel::callRequested);
+    v->addWidget(m_call);
 }
 
 QString DialerPanel::number() const { return m_display->text().trimmed(); }
@@ -349,14 +344,7 @@ void DialerPanel::append(const QString& s) {
     m_display->setCursorPosition(pos + s.length());
 }
 
-void DialerPanel::paintEvent(QPaintEvent*) {
-    QPainter g(this);
-    QLinearGradient bg(rect().topLeft(), rect().bottomLeft());
-    bg.setColorAt(0.0, QColor(0x15, 0x16, 0x1a));
-    bg.setColorAt(0.5, QColor(0x19, 0x1a, 0x1f));
-    bg.setColorAt(1.0, QColor(0x10, 0x11, 0x15));
-    g.fillRect(rect(), bg);
-}
+void DialerPanel::paintEvent(QPaintEvent*) { paintPageBg(this); }
 
 bool DialerPanel::eventFilter(QObject* watched, QEvent* event) {
     if (watched == m_display && event->type() == QEvent::KeyPress) {
@@ -381,74 +369,65 @@ CallPanel::CallPanel(QWidget* parent) : QWidget(parent) {
     m_avatar->base = sig().cyan;
     m_avatar->gradient = true;
 
-    m_nameLabel  = mkLabel(QString(), fontPanelTitle(18), sig().onField,
+    m_nameLabel  = mkLabel(QString(), fontPanelTitle(14), sig().onField,
                            Qt::AlignHCenter | Qt::AlignVCenter, this);
-    m_numberLabel = mkLabel(QString(), fontDisplay(11), sig().onFieldSub,
+    m_numberLabel = mkLabel(QString(), fontDisplay(9.5), sig().onFieldSub,
                             Qt::AlignHCenter | Qt::AlignVCenter, this);
 
     m_timerPill = new QLabel(QStringLiteral("00:00"), this);
     m_timerPill->setAlignment(Qt::AlignCenter);
-    m_timerPill->setFont(fontDisplay(13));
+    m_timerPill->setFont(fontDisplay(11));
     m_timerPill->setStyleSheet(QStringLiteral(
-        "color:%1;background:rgba(255,255,255,28);border-radius:13px;padding:3px 14px;")
+        "color:%1;background:rgba(255,255,255,28);border-radius:11px;padding:2px 10px;")
         .arg(sig().onField.name()));
 
-    m_wave = new Waveform(this);
-    m_wave->color = sig().cyan;
-
-    // Titulo do painel (canto sup-esq, como os demais).
-    auto* title = mkLabel(QStringLiteral("Chamada ativa"), fontPanelTitle(17), sig().onField,
-                          Qt::AlignLeft | Qt::AlignVCenter, this);
-    title->setObjectName("CallTitle");
-    auto* tsub = mkLabel(QStringLiteral("EM CURSO · CRIPTOGRAFADA"), fontTelemetry(8), sig().cyanLight,
-                         Qt::AlignLeft | Qt::AlignVCenter, this);
+    // Status da chamada (topo, centrado) — unico cabecalho da pagina.
+    auto* tsub = mkLabel(QStringLiteral("EM CURSO"), fontTelemetry(8), sig().cyanLight,
+                         Qt::AlignHCenter | Qt::AlignVCenter, this);
     tsub->setObjectName("CallTitleSub");
-    auto* marker = mkLabel(QStringLiteral("— 02"), fontTelemetry(8.5), sig().onFieldSub,
-                           Qt::AlignRight | Qt::AlignVCenter, this);
-    marker->setObjectName("CallMarker");
 
-    // Cluster 2x3 (Active/Held).
+    // Cluster 1x4 (Active/Held): Mudo | Teclado | Espera | Transferir.
     m_cluster = new QWidget(this);
     auto* cg = new QGridLayout(m_cluster);
     cg->setContentsMargins(0, 0, 0, 0);
-    cg->setHorizontalSpacing(26);
-    cg->setVerticalSpacing(6);
+    cg->setHorizontalSpacing(12);
+    cg->setVerticalSpacing(4);
     auto mkCtrl = [this](const QString& gl, const QString& lab, RoundGlyphButton** out) {
         auto* cell = new QWidget(m_cluster);
         auto* cv = new QVBoxLayout(cell);
         cv->setContentsMargins(0, 0, 0, 0);
-        cv->setSpacing(6);
+        cv->setSpacing(4);
         auto* b = new RoundGlyphButton(cell);
-        b->setFixedSize(52, 52);
-        b->glyph = gl; b->glyphSize = 19;
+        b->setFixedSize(42, 42);
+        b->glyph = gl; b->glyphSize = 16;
         b->idleFill = QColor(255, 255, 255, 18);
         b->idleGlyph = sig().onField;
         b->activeFill = sig().cyan;
         b->activeGlyph = Qt::white;
         cv->addWidget(b, 0, Qt::AlignHCenter);
-        cv->addWidget(mkLabel(lab, fontLabel(8.5), sig().onFieldSub,
+        cv->addWidget(mkLabel(lab, fontLabel(7.5), sig().onFieldSub,
                               Qt::AlignHCenter | Qt::AlignVCenter, cell));
         if (out) *out = b;
         return cell;
     };
-    RoundGlyphButton* dummy = nullptr;
+    RoundGlyphButton* keysBtn = nullptr;
+    RoundGlyphButton* trfBtn = nullptr;
     auto* cMute = mkCtrl(glyph::Microphone, QStringLiteral("Mudo"), &m_muteBtn);
-    auto* cKeys = mkCtrl(glyph::Dialpad,    QStringLiteral("Teclado"), &dummy);
+    auto* cKeys = mkCtrl(glyph::Dialpad,    QStringLiteral("Teclado"), &keysBtn);
     auto* cHold = mkCtrl(glyph::Pause,      QStringLiteral("Espera"), &m_holdBtn);
-    auto* cTrf  = mkCtrl(glyph::Transfer,   QStringLiteral("Transferir"), &dummy);
+    auto* cTrf  = mkCtrl(glyph::Transfer,   QStringLiteral("Transf."), &trfBtn);
     cg->addWidget(cMute, 0, 0); cg->addWidget(cKeys, 0, 1);
-    cg->addWidget(cHold, 1, 0); cg->addWidget(cTrf, 1, 1);
+    cg->addWidget(cHold, 0, 2); cg->addWidget(cTrf, 0, 3);
     // Mudo/Espera NAO sao checkable: o estado ativo e dirigido pela MainWindow
     // (setMuteActive/setHoldActive) apos confirmar com o SIP, evitando duplo-toggle.
     connect(m_muteBtn, &RoundGlyphButton::clicked, this, &CallPanel::muteClicked);
     connect(m_holdBtn, &RoundGlyphButton::clicked, this, &CallPanel::holdClicked);
-    // O clique nas celulas correto: o botao e quem emite (label so visual).
-    if (auto* b = cTrf->findChild<RoundGlyphButton*>())
-        connect(b, &RoundGlyphButton::clicked, this, &CallPanel::transferClicked);
+    connect(keysBtn, &RoundGlyphButton::clicked, this, &CallPanel::keypadClicked);
+    connect(trfBtn, &RoundGlyphButton::clicked, this, &CallPanel::transferClicked);
 
     // Encerrar (vermelho).
     m_hangup = new CallButton(this);
-    m_hangup->setFixedSize(66, 66);
+    m_hangup->setFixedSize(52, 52);
     m_hangup->base = sig().red;
     m_hangup->glyph = glyph::Phone;
     m_hangup->glyphRotation = 135;
@@ -458,12 +437,12 @@ CallPanel::CallPanel(QWidget* parent) : QWidget(parent) {
     m_incoming = new QWidget(this);
     auto* ih = new QHBoxLayout(m_incoming);
     ih->setContentsMargins(0, 0, 0, 0);
-    ih->setSpacing(40);
+    ih->setSpacing(34);
     auto* reject = new CallButton(m_incoming);
-    reject->setFixedSize(64, 64);
+    reject->setFixedSize(56, 56);
     reject->base = sig().red; reject->glyph = glyph::Phone; reject->glyphRotation = 135;
     auto* answer = new CallButton(m_incoming);
-    answer->setFixedSize(64, 64);
+    answer->setFixedSize(56, 56);
     answer->base = sig().green; answer->glyph = glyph::Phone;
     connect(reject, &CallButton::clicked, this, &CallPanel::rejectRequested);
     connect(answer, &CallButton::clicked, this, &CallPanel::answerRequested);
@@ -490,7 +469,7 @@ void CallPanel::setPeer(const QString& name, const QString& number) {
 void CallPanel::setTimerText(const QString& t) { m_timerPill->setText(t); }
 void CallPanel::setMuteActive(bool on) { if (m_muteBtn) { m_muteBtn->setActive(on); m_muteBtn->glyph = on ? glyph::Mute : glyph::Microphone; m_muteBtn->update(); } }
 void CallPanel::setHoldActive(bool on) { if (m_holdBtn) m_holdBtn->setActive(on); }
-void CallPanel::pushAudioLevel(float v) { if (m_wave && m_wave->isVisible()) m_wave->pushLevel(v); }
+void CallPanel::pushAudioLevel(float) { /* waveform removido no shell compacto */ }
 void CallPanel::resetControls() { setMuteActive(false); setHoldActive(false); }
 
 void CallPanel::setView(View v) {
@@ -506,26 +485,24 @@ void CallPanel::setView(View v) {
     m_nameLabel->setVisible(!idle);
     m_numberLabel->setVisible(!idle);
     m_timerPill->setVisible(active);
-    m_wave->setVisible(active);
     m_cluster->setVisible(active);
     m_hangup->setVisible(active || outgoing);
     m_incoming->setVisible(incoming);
 
     m_rings->setActive(active || outgoing);
-    m_wave->setPaused(v == View::Held);
 
-    // O status vai no sub do cabecalho ("Chamada ativa / <status>").
+    // O status da chamada e o cabecalho da pagina.
     if (auto* sub = findChild<QLabel*>("CallTitleSub")) {
         sub->setVisible(!idle);
         sub->setText(incoming ? QStringLiteral("CHAMADA RECEBIDA")
                    : outgoing ? QStringLiteral("CHAMANDO…")
                    : v == View::Held ? QStringLiteral("EM ESPERA")
-                   : QStringLiteral("EM CURSO · CRIPTOGRAFADA"));
+                   : QStringLiteral("EM CURSO"));
     }
     relayout();
     // Reposiciona depois do layout pai assentar o tamanho do painel. Sem isto,
-    // trocar de tema DURANTE a chamada (rebuild do shell) posiciona os botoes com
-    // o tamanho antigo/zero e eles "quebram" ate o proximo resize.
+    // reconstruir o shell DURANTE a chamada posiciona os botoes com o tamanho
+    // antigo/zero e eles "quebram" ate o proximo resize.
     QTimer::singleShot(0, this, [this] { relayout(); });
 }
 
@@ -544,43 +521,38 @@ void CallPanel::relayout() {
     const int w = width(), h = height();
     const int cx = w / 2;
 
-    // Cabecalho.
-    if (auto* t = findChild<QLabel*>("CallTitle"))    t->setGeometry(dim::PanelPad, 22, w - 2*dim::PanelPad, 24);
-    if (auto* s = findChild<QLabel*>("CallTitleSub")) s->setGeometry(dim::PanelPad, 47, w - 2*dim::PanelPad, 16);
-    if (auto* m = findChild<QLabel*>("CallMarker"))   m->setGeometry(w - dim::PanelPad - 60, 22, 60, 16);
+    // Status no topo, centrado.
+    if (auto* s = findChild<QLabel*>("CallTitleSub")) s->setGeometry(0, 8, w, 14);
 
     if (m_idleHint->isVisible()) {
         m_idleHint->setGeometry(0, h/2 - 20, w, 40);
         return;
     }
 
-    // Pilha vertical centrada: aneis+avatar, nome, numero, timer, waveform.
-    const int ringSize = std::min(w - 80, 196);
-    const int avSize = 88;
-    int y = 78;
+    // Pilha vertical centrada: aneis+avatar, nome, numero, timer.
+    const int ringSize = std::min(w - 70, 148);
+    const int avSize = 62;
+    int y = 28;
     m_rings->setGeometry(cx - ringSize/2, y, ringSize, ringSize);
     m_avatar->setGeometry(cx - avSize/2, y + ringSize/2 - avSize/2, avSize, avSize);
-    y += ringSize + 6;
+    y += ringSize + 4;
 
-    m_nameLabel->setGeometry(20, y, w - 40, 28); y += 30;
-    m_numberLabel->setGeometry(20, y, w - 40, 18); y += 24;
+    m_nameLabel->setGeometry(10, y, w - 20, 22); y += 24;
+    m_numberLabel->setGeometry(10, y, w - 20, 15); y += 19;
 
-    const int pillW = 130;
-    m_timerPill->setGeometry(cx - pillW/2, y, pillW, 28);
-    if (m_timerPill->isVisible()) y += 38;
-
-    if (m_wave->isVisible()) m_wave->setGeometry(28, y, w - 56, 36);
+    const int pillW = 96;
+    m_timerPill->setGeometry(cx - pillW/2, y, pillW, 22);
 
     // Rodape ancorado embaixo: cluster acima do encerrar (gap garantido); ou
     // incoming (Atender/Recusar); ou so o encerrar (Outgoing).
     if (m_hangup->isVisible())
-        m_hangup->setGeometry(cx - 33, h - 80, 66, 66);
+        m_hangup->setGeometry(cx - 26, h - 62, 52, 52);
     if (m_cluster->isVisible()) {
         const QSize cs = m_cluster->sizeHint();
-        m_cluster->setGeometry(cx - cs.width()/2, h - 80 - cs.height() - 14, cs.width(), cs.height());
+        m_cluster->setGeometry(cx - cs.width()/2, h - 62 - cs.height() - 10, cs.width(), cs.height());
     }
     if (m_incoming->isVisible())
-        m_incoming->setGeometry(0, h - 150, w, 80);
+        m_incoming->setGeometry(0, h - 76, w, 60);
 }
 
 // ===========================================================================
@@ -588,35 +560,25 @@ void CallPanel::relayout() {
 // ===========================================================================
 RecentsPanel::RecentsPanel(QWidget* parent) : QWidget(parent) {
     auto* v = new QVBoxLayout(this);
-    v->setContentsMargins(dim::PanelPad, 24, dim::PanelPad, 16);
+    v->setContentsMargins(dim::PanelPad, 10, dim::PanelPad, 8);
     v->setSpacing(0);
-
-    auto* head = new QHBoxLayout();
-    auto* titleBox = new QVBoxLayout();
-    titleBox->setSpacing(2);
-    titleBox->addWidget(mkLabel(QStringLiteral("Recentes"), fontPanelTitle(17), textPrimary()));
-    titleBox->addWidget(mkLabel(QStringLiteral("HISTÓRICO · CONTATOS"), fontTelemetry(8), sig().accentSub));
-    head->addLayout(titleBox);
-    head->addStretch();
-    v->addLayout(head);
-    v->addSpacing(16);
 
     // Busca.
     auto* searchCard = new QWidget(this);
     searchCard->setObjectName("SearchCard");
-    searchCard->setFixedHeight(44);
+    searchCard->setFixedHeight(34);
     searchCard->setStyleSheet(QStringLiteral(
         "#SearchCard{background:%1;border:1px solid %2;border-radius:%3px;}")
         .arg(panelGray().name(), border().name()).arg(dim::CardRadius));
     auto* sh = new QHBoxLayout(searchCard);
-    sh->setContentsMargins(14, 0, 14, 0);
-    sh->setSpacing(8);
-    auto* sIcon = mkLabel(glyph::Search, iconPx(14), textTertiary(),
+    sh->setContentsMargins(10, 0, 10, 0);
+    sh->setSpacing(6);
+    auto* sIcon = mkLabel(glyph::Search, iconPx(12), textTertiary(),
                           Qt::AlignVCenter | Qt::AlignHCenter, searchCard);
-    sIcon->setFixedWidth(18);
+    sIcon->setFixedWidth(16);
     sh->addWidget(sIcon);
     m_search = new QLineEdit(searchCard);
-    m_search->setFont(fontLabel(10.5));
+    m_search->setFont(fontLabel(9.5));
     m_search->setPlaceholderText(QStringLiteral("Buscar contato ou número"));
     m_search->setStyleSheet(QStringLiteral(
         "QLineEdit{background:transparent;border:none;color:%1;}").arg(textPrimary().name()));
@@ -625,20 +587,20 @@ RecentsPanel::RecentsPanel(QWidget* parent) : QWidget(parent) {
     });
     sh->addWidget(m_search, 1);
     v->addWidget(searchCard);
-    v->addSpacing(14);
+    v->addSpacing(8);
 
     // Abas de filtro.
     auto* tabsRow = new QHBoxLayout();
-    tabsRow->setSpacing(6);
+    tabsRow->setSpacing(4);
     m_tabs = new QButtonGroup(this);
     const char* names[] = { "Todas", "Perdidas", "Recebidas", "Feitas" };
     for (int i = 0; i < 4; ++i) {
         auto* b = new QPushButton(QString::fromUtf8(names[i]), this);
         b->setCheckable(true);
         b->setCursor(Qt::PointingHandCursor);
-        b->setFont(fontLabel(9.5));
+        b->setFont(fontLabel(8));
         b->setStyleSheet(QStringLiteral(
-            "QPushButton{border:none;background:transparent;color:%1;padding:5px 12px;border-radius:13px;}"
+            "QPushButton{border:none;background:transparent;color:%1;padding:4px 7px;border-radius:11px;}"
             "QPushButton:checked{background:%2;color:#ffffff;}")
             .arg(textSecondary().name(), sig().navyA.name()));
         m_tabs->addButton(b, i);
@@ -650,7 +612,7 @@ RecentsPanel::RecentsPanel(QWidget* parent) : QWidget(parent) {
         if (m_proxy) m_proxy->setMode(static_cast<CallLogProxy::Mode>(id));
     });
     v->addLayout(tabsRow);
-    v->addSpacing(10);
+    v->addSpacing(6);
 
     // Lista (Model/View): CallLogModel -> CallLogProxy -> QListView + delegate.
     m_model = new CallLogModel(this);
@@ -675,15 +637,15 @@ RecentsPanel::RecentsPanel(QWidget* parent) : QWidget(parent) {
     connect(delegate, &CallLogDelegate::redial, this, &RecentsPanel::redial);
     v->addWidget(view, 1);
 
-    // Rodape de telemetria (estatico — fase 2 puxa dados reais).
-    v->addSpacing(8);
+    // Rodape de telemetria (alimentado pela MainWindow durante a chamada).
+    v->addSpacing(6);
     auto* foot = new QHBoxLayout();
     foot->setSpacing(0);
     auto mkStat = [this](const QString& cap, const QString& val, QLabel** out) {
         auto* cell = new QVBoxLayout();
         cell->setSpacing(1);
-        cell->addWidget(mkLabel(cap, fontTelemetry(7.5), textTertiary()));
-        auto* vl = mkLabel(val, fontDisplay(10.5), textSecondary());
+        cell->addWidget(mkLabel(cap, fontTelemetry(7), textTertiary()));
+        auto* vl = mkLabel(val, fontDisplay(9.5), textSecondary());
         if (out) *out = vl;
         cell->addWidget(vl);
         return cell;
@@ -708,14 +670,7 @@ void RecentsPanel::clearTelemetry() {
     setTelemetry(QStringLiteral("—"), QStringLiteral("—"), QStringLiteral("▯▯▯▯"));
 }
 
-void RecentsPanel::paintEvent(QPaintEvent*) {
-    QPainter g(this);
-    QLinearGradient bg(rect().topLeft(), rect().bottomLeft());
-    bg.setColorAt(0.0, QColor(0x15, 0x16, 0x1a));
-    bg.setColorAt(0.5, QColor(0x19, 0x1a, 0x1f));
-    bg.setColorAt(1.0, QColor(0x10, 0x11, 0x15));
-    g.fillRect(rect(), bg);
-}
+void RecentsPanel::paintEvent(QPaintEvent*) { paintPageBg(this); }
 
 // ===========================================================================
 //  SettingsPanel
@@ -723,60 +678,48 @@ void RecentsPanel::paintEvent(QPaintEvent*) {
 SettingsPanel::SettingsPanel(SipConfig* config, QWidget* parent)
     : QWidget(parent), m_config(config) {
     auto* v = new QVBoxLayout(this);
-    // Compacto para caber no shell reduzido (ShellH) sem rolagem.
-    v->setContentsMargins(dim::PanelPad, 18, dim::PanelPad, 14);
+    // Compacto para caber na pagina do shell fixo sem rolagem.
+    v->setContentsMargins(dim::PanelPad, 10, dim::PanelPad, 10);
     v->setSpacing(0);
 
-    // Cabecalho.
-    auto* head = new QHBoxLayout();
-    auto* titleBox = new QVBoxLayout();
-    titleBox->setSpacing(2);
-    titleBox->addWidget(mkLabel(QStringLiteral("Configurações"), fontPanelTitle(17), textPrimary()));
-    titleBox->addWidget(mkLabel(QStringLiteral("CONTA · SIP/RTP"), fontTelemetry(8), sig().accentSub));
-    head->addLayout(titleBox);
-    head->addStretch();
-    head->addWidget(mkMarker(QString::fromUtf8("v") + QStringLiteral(SPHONE_VERSION), this), 0, Qt::AlignTop);
-    v->addLayout(head);
-    v->addSpacing(12);
-
     auto section = [&](const QString& t) {
-        auto* l = mkLabel(t.toUpper(), fontTelemetry(8), textTertiary());
+        auto* l = mkLabel(t.toUpper(), fontTelemetry(7.5), textTertiary());
         v->addWidget(l);
-        v->addSpacing(6);
+        v->addSpacing(4);
     };
     auto field = [&](const QString& label, bool password, QLineEdit*& out) {
-        v->addWidget(mkLabel(label, fontLabel(9.5), textSecondary()));
-        v->addSpacing(4);
+        v->addWidget(mkLabel(label, fontLabel(8.5), textSecondary()));
+        v->addSpacing(2);
         out = new QLineEdit(this);
-        out->setFont(fontLabel(11));
-        out->setFixedHeight(38);
+        out->setFont(fontLabel(10));
+        out->setFixedHeight(30);
         if (password) out->setEchoMode(QLineEdit::Password);
         out->setStyleSheet(QStringLiteral(
-            "QLineEdit{background:%1;border:1px solid %2;border-radius:%3px;padding:0 13px;color:%4;}"
+            "QLineEdit{background:%1;border:1px solid %2;border-radius:%3px;padding:0 10px;color:%4;}"
             "QLineEdit:focus{border:1px solid %5;}")
             .arg(panelGray().name(), border().name()).arg(dim::CardRadius)
             .arg(textPrimary().name(), sig().cyan.name()));
         v->addWidget(out);
-        v->addSpacing(8);
+        v->addSpacing(5);
     };
 
     auto combo = [&](const QString& label, QComboBox*& out) {
-        v->addWidget(mkLabel(label, fontLabel(9.5), textSecondary()));
-        v->addSpacing(4);
+        v->addWidget(mkLabel(label, fontLabel(8.5), textSecondary()));
+        v->addSpacing(2);
         out = new QComboBox(this);
-        out->setFont(fontLabel(11));
-        out->setFixedHeight(38);
+        out->setFont(fontLabel(10));
+        out->setFixedHeight(30);
         out->setCursor(Qt::PointingHandCursor);
         out->setStyleSheet(QStringLiteral(
-            "QComboBox{background:%1;border:1px solid %2;border-radius:%3px;padding:0 13px;color:%4;}"
+            "QComboBox{background:%1;border:1px solid %2;border-radius:%3px;padding:0 10px;color:%4;}"
             "QComboBox:focus{border:1px solid %5;}"
-            "QComboBox::drop-down{border:none;width:26px;}"
+            "QComboBox::drop-down{border:none;width:22px;}"
             "QComboBox QAbstractItemView{background:%1;border:1px solid %2;color:%4;"
             "selection-background-color:%5;outline:none;}")
             .arg(panelGray().name(), border().name()).arg(dim::CardRadius)
             .arg(textPrimary().name(), sig().cyan.name()));
         v->addWidget(out);
-        v->addSpacing(8);
+        v->addSpacing(5);
     };
 
     section(QStringLiteral("Conta"));
@@ -784,21 +727,17 @@ SettingsPanel::SettingsPanel(SipConfig* config, QWidget* parent)
     field(QStringLiteral("Ramal"), false, m_user);
     field(QStringLiteral("Senha"), true, m_pass);
 
-    v->addSpacing(10);
+    v->addSpacing(4);
     section(QStringLiteral("Áudio"));
     combo(QString::fromUtf8("Microfone (falar)"), m_capture);
     combo(QString::fromUtf8("Alto-falante / fone (ouvir)"), m_playback);
 
-    // Secao "Aparência" (alternar claro/escuro) removida por ora — tema fixo
-    // grafite. Voltara no futuro.
-
-    v->addSpacing(10);
-    section(QStringLiteral("Atualização"));
+    v->addSpacing(4);
     {
         auto* upd = new QPushButton(QString::fromUtf8("Procurar atualização"), this);
         upd->setCursor(Qt::PointingHandCursor);
-        upd->setFont(fontLabel(10.5));
-        upd->setFixedHeight(38);
+        upd->setFont(fontLabel(9.5));
+        upd->setFixedHeight(30);
         upd->setStyleSheet(QStringLiteral(
             "QPushButton{background:%1;border:1px solid %2;border-radius:%3px;color:%4;}"
             "QPushButton:hover{border:1px solid %5;}")
@@ -810,24 +749,26 @@ SettingsPanel::SettingsPanel(SipConfig* config, QWidget* parent)
 
     v->addStretch();
 
-    // Rodape: Cancelar | Salvar.
+    // Rodape: versao | Cancelar | Salvar.
     auto* foot = new QHBoxLayout();
-    foot->setSpacing(10);
+    foot->setSpacing(8);
+    foot->addWidget(mkLabel(QString::fromUtf8("v") + QStringLiteral(SPHONE_VERSION),
+                            fontTelemetry(8), textTertiary()));
     foot->addStretch();
     auto* cancel = new QPushButton(QStringLiteral("Cancelar"), this);
     cancel->setCursor(Qt::PointingHandCursor);
-    cancel->setFont(fontLabel(10.5));
-    cancel->setFixedSize(110, 38);
+    cancel->setFont(fontLabel(9.5));
+    cancel->setFixedSize(78, 30);
     cancel->setStyleSheet(QStringLiteral(
         "QPushButton{background:%1;border:1px solid %2;border-radius:%3px;color:%4;}")
         .arg(panelGray().name(), border().name()).arg(dim::CardRadius).arg(textPrimary().name()));
     connect(cancel, &QPushButton::clicked, this, &SettingsPanel::closed);
     auto* save = new QPushButton(QStringLiteral("Salvar"), this);
     save->setCursor(Qt::PointingHandCursor);
-    save->setFont(fontLabel(10.5));
-    save->setFixedSize(140, 38);
+    save->setFont(fontLabel(9.5));
+    save->setFixedSize(92, 30);
     save->setStyleSheet(QStringLiteral(
-        "QPushButton{background:%1;border:none;border-radius:%2px;color:#ffffff;}"
+        "QPushButton{background:%1;border:none;border-radius:%2px;color:#15161a;}"
         "QPushButton:hover{background:%3;}")
         .arg(sig().cyan.name()).arg(dim::CardRadius).arg(blend(sig().cyan, Qt::white, 0.10).name()));
     connect(save, &QPushButton::clicked, this, [this] {
@@ -891,13 +832,6 @@ void SettingsPanel::setAudioDevices(const QList<AudioDevice>& devices) {
     fill(m_playback, false, m_config ? m_config->playbackDevice : QString());
 }
 
-void SettingsPanel::paintEvent(QPaintEvent*) {
-    QPainter g(this);
-    QLinearGradient bg(rect().topLeft(), rect().bottomLeft());
-    bg.setColorAt(0.0, QColor(0x15, 0x16, 0x1a));
-    bg.setColorAt(0.5, QColor(0x19, 0x1a, 0x1f));
-    bg.setColorAt(1.0, QColor(0x10, 0x11, 0x15));
-    g.fillRect(rect(), bg);
-}
+void SettingsPanel::paintEvent(QPaintEvent*) { paintPageBg(this); }
 
 }  // namespace sphone

@@ -150,18 +150,4 @@ private:
     bool m_paused = false;
 };
 
-// RegPill — pilula de status de registro sobre o TitleBar navy (dot + texto).
-class RegPill : public QWidget {
-    Q_OBJECT
-public:
-    explicit RegPill(QWidget* parent = nullptr);
-    void setRegistered(bool ok, const QString& text);
-    QSize sizeHint() const override;
-protected:
-    void paintEvent(QPaintEvent*) override;
-private:
-    bool    m_ok = false;
-    QString m_text = QStringLiteral("CONECTANDO");
-};
-
 }  // namespace sphone
