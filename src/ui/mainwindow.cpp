@@ -279,18 +279,24 @@ void MainWindow::applyState(LS st) {
     updateStatus();
 }
 
-// Escolha da pagina do stack: chamada RECEBIDA forca a pagina de chamada e
-// trava a janela; chamada de saida/ativa mostra a chamada na aba Telefone
-// (com o discador acessivel via cluster "Teclado" p/ DTMF); sem chamada, a
-// pagina segue a aba escolhida. A janela NUNCA muda de tamanho.
+// Escolha da pagina do stack: chamada RECEBIDA forca a pagina de chamada em
+// TELA CHEIA (sem barras, janela travada) ate atender/recusar; chamada de
+// saida/ativa mostra a chamada na aba Telefone no shell compacto (discador
+// acessivel via cluster "Teclado" p/ DTMF); sem chamada, a pagina segue a aba.
+// Usa m_prevState (mantido por applyState) como fonte do estado da linha.
 void MainWindow::updateLayout() {
-    const LS st = m_sip ? m_sip->state() : LS::Offline;
+    const LS st = m_prevState;
     const bool incoming = (st == LS::Ringing);
     const bool inCall   = (st == LS::Calling || st == LS::InCall);
     if (!inCall) m_dtmfPad = false;
 
     setWindowLocked(incoming);
     if (m_tabsBar) m_tabsBar->setLocked(incoming);
+
+    // Takeover: durante o toque so existe a pagina de chamada, sem chrome.
+    if (m_titleBar) m_titleBar->setVisible(!incoming);
+    if (m_tabsBar)  m_tabsBar->setVisible(!incoming);
+    if (m_status)   m_status->setVisible(!incoming);
 
     QWidget* page = nullptr;
     if (incoming)               page = m_call;
@@ -300,6 +306,19 @@ void MainWindow::updateLayout() {
                                                               : static_cast<QWidget*>(m_dialer);
     if (m_stack) m_stack->setCurrentWidget(page);
     if (m_tabsBar) m_tabsBar->setCurrent(incoming ? TabsBar::Phone : m_tab);
+
+    // Tamanho: tocando = METADE da tela, centralizado (takeover); demais
+    // estados = shell compacto fixo ancorado no canto inferior direito.
+    QScreen* scr = screen() ? screen() : QApplication::primaryScreen();
+    const QRect area = scr ? scr->availableGeometry() : QRect(0, 0, dim::ShellW, dim::ShellH);
+    const QSize target = incoming ? QSize(area.width() / 2, area.height() / 2)
+                                  : QSize(dim::ShellW, dim::ShellH);
+    if (size() != target) {
+        setFixedSize(target);
+        if (incoming) move(area.center().x() - target.width() / 2,
+                           area.center().y() - target.height() / 2);
+        else          anchorBottomRight();
+    }
 }
 
 void MainWindow::setWindowLocked(bool on) {

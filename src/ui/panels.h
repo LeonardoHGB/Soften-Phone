@@ -156,6 +156,8 @@ private:
     QWidget*          m_cluster = nullptr;   // 1x4 de controles (Active/Held)
     QWidget*          m_incoming = nullptr;  // Atender/Recusar (Incoming)
     CallButton*       m_hangup = nullptr;
+    CallButton*       m_reject = nullptr;    // redimensionados no takeover
+    CallButton*       m_answer = nullptr;
     QWidget*          m_idleHint = nullptr;  // placeholder "sem chamada"
     RoundGlyphButton* m_muteBtn = nullptr;
     RoundGlyphButton* m_holdBtn = nullptr;

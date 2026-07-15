@@ -439,15 +439,18 @@ CallPanel::CallPanel(QWidget* parent) : QWidget(parent) {
     auto* ih = new QHBoxLayout(m_incoming);
     ih->setContentsMargins(0, 0, 0, 0);
     ih->setSpacing(34);
-    auto* reject = new CallButton(m_incoming);
-    reject->setFixedSize(56, 56);
-    reject->base = sig().red; reject->glyph = glyph::Phone; reject->glyphRotation = 135;
-    auto* answer = new CallButton(m_incoming);
-    answer->setFixedSize(56, 56);
-    answer->base = sig().green; answer->glyph = glyph::Phone;
-    connect(reject, &CallButton::clicked, this, &CallPanel::rejectRequested);
-    connect(answer, &CallButton::clicked, this, &CallPanel::answerRequested);
-    ih->addStretch(); ih->addWidget(reject); ih->addWidget(answer); ih->addStretch();
+    m_reject = new CallButton(m_incoming);
+    m_reject->setFixedSize(56, 56);
+    m_reject->base = sig().red; m_reject->glyph = glyph::Phone; m_reject->glyphRotation = 135;
+    m_answer = new CallButton(m_incoming);
+    m_answer->setFixedSize(56, 56);
+    m_answer->base = sig().green; m_answer->glyph = glyph::Phone;
+    connect(m_reject, &CallButton::clicked, this, &CallPanel::rejectRequested);
+    connect(m_answer, &CallButton::clicked, this, &CallPanel::answerRequested);
+    ih->addStretch(); ih->addWidget(m_reject); ih->addWidget(m_answer); ih->addStretch();
+    // Sem opcao de recusar (decisao do produto): so o Atender aparece; o botao
+    // de recusa fica pronto no codigo caso volte no futuro.
+    m_reject->hide();
 
     // Idle hint.
     m_idleHint = new QWidget(this);
@@ -521,9 +524,15 @@ void CallPanel::resizeEvent(QResizeEvent*) { relayout(); }
 void CallPanel::relayout() {
     const int w = width(), h = height();
     const int cx = w / 2;
+    // Chamada recebida no takeover de MEIA TELA: escala aneis, fontes e botoes
+    // pela altura. No shell compacto (h ~380) usa as medidas pequenas.
+    const bool big = h > 450;
 
     // Status no topo, centrado.
-    if (auto* s = findChild<QLabel*>("CallTitleSub")) s->setGeometry(0, 8, w, 14);
+    if (auto* s = findChild<QLabel*>("CallTitleSub")) {
+        s->setFont(fontTelemetry(big ? 12 : 8));
+        s->setGeometry(0, big ? int(h * 0.06) : 8, w, big ? 24 : 14);
+    }
 
     if (m_idleHint->isVisible()) {
         m_idleHint->setGeometry(0, h/2 - 20, w, 40);
@@ -531,15 +540,18 @@ void CallPanel::relayout() {
     }
 
     // Pilha vertical centrada: aneis+avatar, nome, numero, timer.
-    const int ringSize = std::min(w - 70, 148);
-    const int avSize = 62;
-    int y = 28;
+    const int ringSize = big ? std::min({w - 200, int(h * 0.42), 430})
+                             : std::min(w - 70, 148);
+    const int avSize = big ? int(ringSize * 0.44) : 62;
+    int y = big ? int(h * 0.13) : 28;
     m_rings->setGeometry(cx - ringSize/2, y, ringSize, ringSize);
     m_avatar->setGeometry(cx - avSize/2, y + ringSize/2 - avSize/2, avSize, avSize);
-    y += ringSize + 4;
+    y += ringSize + (big ? 20 : 4);
 
-    m_nameLabel->setGeometry(10, y, w - 20, 22); y += 24;
-    m_numberLabel->setGeometry(10, y, w - 20, 15); y += 19;
+    m_nameLabel->setFont(fontPanelTitle(big ? 26 : 14));
+    m_nameLabel->setGeometry(10, y, w - 20, big ? 44 : 22); y += big ? 48 : 24;
+    m_numberLabel->setFont(fontDisplay(big ? 15 : 9.5));
+    m_numberLabel->setGeometry(10, y, w - 20, big ? 26 : 15); y += big ? 30 : 19;
 
     const int pillW = 96;
     m_timerPill->setGeometry(cx - pillW/2, y, pillW, 22);
@@ -552,8 +564,15 @@ void CallPanel::relayout() {
         const QSize cs = m_cluster->sizeHint();
         m_cluster->setGeometry(cx - cs.width()/2, h - 62 - cs.height() - 10, cs.width(), cs.height());
     }
-    if (m_incoming->isVisible())
-        m_incoming->setGeometry(0, h - 76, w, 60);
+    if (m_incoming->isVisible()) {
+        const int btn = big ? 84 : 56;
+        m_reject->setFixedSize(btn, btn);
+        m_answer->setFixedSize(btn, btn);
+        m_reject->glyphSize = big ? 32 : 26;
+        m_answer->glyphSize = big ? 32 : 26;
+        const int rowH = btn + 8;
+        m_incoming->setGeometry(0, h - (big ? int(h * 0.06) : 12) - rowH, w, rowH);
+    }
 }
 
 // ===========================================================================
