@@ -52,6 +52,14 @@ void cb_incoming_call(pjsua_acc_id acc, pjsua_call_id call_id, pjsip_rx_data* rd
     PJ_UNUSED_ARG(acc);
     PJ_UNUSED_ARG(rdata);
 
+    // Linha ja ocupada (outra chamada em curso, tocando ou saindo): recusa 486
+    // Busy na hora, sem tocar nem tomar a tela — a fila/PABX segue adiante.
+    // (a chamada que esta chegando ja conta em pjsua_call_get_count)
+    if (pjsua_call_get_count() > 1) {
+        pjsua_call_hangup(call_id, PJSIP_SC_BUSY_HERE, NULL, NULL);
+        return;
+    }
+
     QString sip_call_id;
     if (pjsua_call_get_info(call_id, &ci) == PJ_SUCCESS) {
         int n = (int)(ci.remote_info.slen < 255 ? ci.remote_info.slen : 255);
@@ -258,6 +266,7 @@ int PjEngine::makeCall(const QString& domain, const QString& dest) {
 
 void PjEngine::answer(int callId)   { ensure_thread(); pjsua_call_answer((pjsua_call_id)callId, 200, NULL, NULL); }
 void PjEngine::hangup(int callId)   { ensure_thread(); pjsua_call_hangup((pjsua_call_id)callId, 0, NULL, NULL); }
+void PjEngine::busy(int callId)     { ensure_thread(); pjsua_call_hangup((pjsua_call_id)callId, PJSIP_SC_BUSY_HERE, NULL, NULL); }
 void PjEngine::hangupAll()          { ensure_thread(); pjsua_call_hangup_all(); }
 
 void PjEngine::sendDtmf(int callId, const QString& digits) {
@@ -406,6 +415,7 @@ void PjEngine::shutdown()                                      {}
 int  PjEngine::makeCall(const QString&, const QString&)        { return -1; }
 void PjEngine::answer(int)                                     {}
 void PjEngine::hangup(int)                                     {}
+void PjEngine::busy(int)                                       {}
 void PjEngine::hangupAll()                                     {}
 void PjEngine::sendDtmf(int, const QString&)                   {}
 void PjEngine::hold(int)                                       {}

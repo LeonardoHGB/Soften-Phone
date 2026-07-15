@@ -42,6 +42,7 @@ public:
     int  makeCall(const QString& domain, const QString& dest);  // call_id / -1
     void answer(int callId);              // 200 OK
     void hangup(int callId);
+    void busy(int callId);                // recusa com 486 Busy Here (linha ocupada)
     void hangupAll();
     void sendDtmf(int callId, const QString& digits);
     void hold(int callId);

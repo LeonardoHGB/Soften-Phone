@@ -80,6 +80,15 @@ void SipManager::onRegState(int registered, int code) {
 }
 
 void SipManager::onIncomingCall(int callId, QString from, QString sipCallId) {
+    // Cinto-e-suspensorio do 486 do motor: linha ja ocupada (em chamada,
+    // chamando, ou OUTRA chamada tocando) recusa como ocupado sem tocar,
+    // sem tomar a tela e sem abrir auditoria.
+    if (m_state == LineState::InCall || m_state == LineState::Calling
+        || (m_state == LineState::Ringing && callId != m_incomingCall)) {
+        m_pj->busy(callId);
+        return;
+    }
+
     auto [number, name] = parseCaller(from);
     QString num = number.trimmed().isEmpty() ? QStringLiteral("desconhecido") : number;
 
