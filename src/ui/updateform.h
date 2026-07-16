@@ -23,8 +23,8 @@ private:
     Updater*      m_updater = nullptr;
 };
 
-// Checa atualizacao com UI: prompt se houver versao nova, mensagens se nao.
-// silent=true (boot): so fala se houver update (sem ruido se ja-atualizado/offline).
+// Checa atualizacao com UI: se houver versao nova, baixa e instala direto (sem
+// perguntar). silent=true (boot): sem ruido se ja-atualizado/offline.
 void runUpdateCheck(QWidget* parent, bool silent);
 
 }  // namespace sphone

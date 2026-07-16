@@ -64,13 +64,9 @@ void runUpdateCheck(QWidget* parent, bool silent) {
 
     QObject::connect(up, &Updater::updateAvailable, parent, [parent, up](const UpdateInfo& info) {
         up->deleteLater();
-        const QString msg = QString::fromUtf8(
-            "Nova versão disponível: %1\nVersão atual: %2\n\n%3\n\nAtualizar agora? O Soften Phone será reiniciado.")
-            .arg(info.version, Updater::currentVersion(), info.notes);
-        if (QMessageBox::question(parent, QStringLiteral("Soften Phone"), msg) == QMessageBox::Yes) {
-            UpdateForm dlg(info, parent);
-            dlg.exec();
-        }
+        // Atualizacao mandatoria: achou versao nova, baixa e instala direto.
+        UpdateForm dlg(info, parent);
+        dlg.exec();
     });
     QObject::connect(up, &Updater::upToDate, parent, [parent, up, silent] {
         up->deleteLater();
